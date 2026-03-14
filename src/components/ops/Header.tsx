@@ -1,0 +1,36 @@
+import { RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ScenarioSelector } from "./ScenarioSelector";
+import { ScenarioKey } from "@/features/ops-planning/types";
+
+interface HeaderProps {
+  scenario: ScenarioKey;
+  onScenarioChange: (scenario: ScenarioKey) => void;
+  onReset: () => void;
+  periodLabel: string;
+}
+
+export const Header = ({ scenario, onScenarioChange, onReset, periodLabel }: HeaderProps) => {
+  return (
+    <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-6">
+        <div>
+          <h1 className="heading-tight text-lg font-semibold">Calculadora de Dimensionamento</h1>
+          <p className="text-xs text-muted-foreground">Planejamento de demanda, capacity e hiring mês a mês</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <ScenarioSelector value={scenario} onChange={onScenarioChange} />
+          <Button variant="outline" size="sm" onClick={onReset} className="gap-2">
+            <RotateCcw className="h-3.5 w-3.5" />
+            Restaurar premissas padrão
+          </Button>
+          <span className="inline-flex items-center gap-2 rounded-md border bg-card px-2.5 py-1 text-xs text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" /> Atualização automática
+          </span>
+          <span className="rounded-md border bg-card px-2.5 py-1 text-xs text-muted-foreground">{periodLabel}</span>
+        </div>
+      </div>
+    </header>
+  );
+};
