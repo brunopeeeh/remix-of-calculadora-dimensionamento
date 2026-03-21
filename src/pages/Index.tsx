@@ -80,6 +80,9 @@ const Index = () => {
   const [inputs, setInputs] = useState<PlannerInputs>(cloneInputs(SCENARIO_PRESETS.base));
 
   const projection = useMemo(() => runPlannerProjection(inputs), [inputs]);
+  const inferredContactRate = inputs.currentClients > 0 ? inputs.currentVolume / inputs.currentClients : 0;
+  const contactRateDriftPct =
+    inferredContactRate > 0 ? Math.abs(inputs.contactRate - inferredContactRate) / inferredContactRate * 100 : 0;
 
   const patch = <K extends keyof PlannerInputs>(key: K, value: PlannerInputs[K]) => {
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -99,10 +102,12 @@ const Index = () => {
     setInputs(cloneInputs(SCENARIO_PRESETS.base));
   };
 
-  const toggleTurnoverMonth = (month: number) => {
+  const toggleTurnoverMonth = (monthKey: string) => {
     setInputs((prev) => {
-      const active = prev.turnoverMonths.includes(month);
-      const next = active ? prev.turnoverMonths.filter((item) => item !== month) : [...prev.turnoverMonths, month].sort((a, b) => a - b);
+      const active = prev.turnoverMonths.includes(monthKey);
+      const next = active
+        ? prev.turnoverMonths.filter((item) => item !== monthKey)
+        : [...prev.turnoverMonths, monthKey].sort((a, b) => a.localeCompare(b));
       return { ...prev, turnoverMonths: next };
     });
   };
@@ -175,13 +180,18 @@ const Index = () => {
             <RangeNumberField
               label="Contact rate (C.R.)"
               description="Quantidade média de chamados por cliente por mês"
-              tooltip="Volume bruto = base de clientes x contact rate"
+              tooltip="Volume bruto = base de clientes x contact rate (se C.R. for 0, usamos volume atual / clientes atuais)"
               value={inputs.contactRate}
               min={0.5}
               max={4.5}
               step={0.01}
               onChange={(value) => patch("contactRate", clamp(value, 0.5, 4.5))}
             />
+            {inputs.currentVolume > 0 && inputs.currentClients > 0 && contactRateDriftPct > 10 ? (
+              <p className="text-[11px] text-warning">
+                C.R. informado diverge {formatDecimal(contactRateDriftPct, 1)}% do C.R. inferido ({formatDecimal(inferredContactRate, 2)}) por volume/base atuais.
+              </p>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
@@ -247,13 +257,13 @@ const Index = () => {
                     <span className="mono-numbers text-xs text-muted-foreground">{point.label}</span>
                     <Input
                       type="number"
-                      value={inputs.manualGrowthByMonth[point.month] ?? 0}
+                      value={inputs.manualGrowthByMonth[point.key] ?? 0}
                       onChange={(event) =>
                         setInputs((prev) => ({
                           ...prev,
                           manualGrowthByMonth: {
                             ...prev.manualGrowthByMonth,
-                            [point.month]: Number(event.target.value),
+                            [point.key]: Number(event.target.value),
                           },
                         }))
                       }
@@ -318,7 +328,7 @@ const Index = () => {
             <SimpleNumberField
               label="Ramp-up (meses)"
               description="Tempo até plena produtividade"
-              tooltip="Usado para antecipar abertura de vaga"
+              tooltip="Contribuição progressiva de HC: mês i contribui (i+1)/ramp-up até 100%; usado também na antecedência de abertura"
               value={inputs.rampUpMonths}
               min={1}
               max={6}
@@ -446,8 +456,8 @@ const Index = () => {
                     className="flex items-center gap-2 rounded-md border bg-card px-2 py-1.5 text-xs"
                   >
                     <Checkbox
-                      checked={inputs.turnoverMonths.includes(point.month)}
-                      onCheckedChange={() => toggleTurnoverMonth(point.month)}
+                      checked={inputs.turnoverMonths.includes(point.key)}
+                      onCheckedChange={() => toggleTurnoverMonth(point.key)}
                     />
                     {point.label}
                   </label>
@@ -517,7 +527,7 @@ const Index = () => {
             <KPIWidget
               title="Agentes necessários em Q4"
               subtitle="Headcount necessário no cenário atual"
-              tooltip="Agentes necessários = teto(Volume humano / Capacidade efetiva por agente)"
+              tooltip="Agentes necessários (raw) = Volume humano / Capacidade efetiva; valor exibido = teto(raw)"
               value={projection.summary.agentsNeededQ4}
               format={(value) => formatInt(value)}
               tone={projection.summary.riskMonths.length > 0 ? "risk" : "default"}
@@ -532,7 +542,7 @@ const Index = () => {
             <KPIWidget
               title="Mês crítico para abrir vaga"
               subtitle="Último mês para contratação sem atraso operacional"
-              tooltip="Mês da necessidade - lead time - rampa parcial de onboarding (33/66/100)"
+              tooltip={`Mês da necessidade - lead time - maturação da rampa (ramp-up ${inputs.rampUpMonths} meses)`}
               value={projection.summary.criticalOpenMonth}
               tone={projection.summary.riskMonths.length > 0 ? "risk" : "success"}
             />
@@ -556,7 +566,7 @@ const Index = () => {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Evolução de headcount" subtitle="Agentes necessários, HC efetivo (rampa 33/66/100) e gap mensal">
+            <ChartCard title="Evolução de headcount" subtitle={`Agentes necessários, HC efetivo (rampa ${inputs.rampUpMonths} meses) e gap mensal`}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartRows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -603,7 +613,7 @@ const Index = () => {
           <MonthlyTable rows={projection.rows} />
 
           <p className={cn("text-xs text-muted-foreground", projection.summary.riskMonths.length ? "text-warning" : "text-success")}>
-            Rampa parcial ativa no modelo (mês 1 = 33%, mês 2 = 66%, mês 3+ = 100%).
+            Rampa parcial ativa no modelo com maturação em {inputs.rampUpMonths} meses.
           </p>
         </main>
       </div>
