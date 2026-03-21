@@ -47,6 +47,18 @@ const distributeTurnover = (inputs: PlannerInputs, timeline: MonthPoint[]) => {
 
 const baseWeightedTma = 20 * 0.8 + 45 * 0.2;
 
+const rampFactor = (monthsSinceHire: number) => {
+  if (monthsSinceHire < 0) return 0;
+  if (monthsSinceHire === 0) return 0.33;
+  if (monthsSinceHire === 1) return 0.66;
+  return 1;
+};
+
+interface HireCohort {
+  monthIndex: number;
+  count: number;
+}
+
 export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult => {
   const timeline = buildTimeline(inputs.startMonth, inputs.endMonth);
   const rows = [] as ProjectionResult["rows"];
@@ -87,7 +99,8 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     (1 - adjustedVacationPct);
 
   let previousClients = inputs.currentClients;
-  let previousHcFinal = inputs.headcountCurrent;
+  let legacyNominal = inputs.headcountCurrent;
+  const hireCohorts: HireCohort[] = [];
 
   timeline.forEach((point, index) => {
     const clientsBase =
@@ -104,13 +117,45 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
 
     const agentsNeeded = Math.ceil(volumeHuman / Math.max(1, capacityPerAgent));
 
-    const hcInitial = index === 0 ? inputs.headcountCurrent : previousHcFinal;
-    const turnover = turnoverByMonth.get(point.month) ?? 0;
-    const gap = Math.max(0, agentsNeeded - hcInitial);
-    const hire = gap;
-    const hcFinal = Math.max(0, hcInitial + hire - turnover);
+    const hcInitial = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
+    const hcAvailableFromExisting =
+      legacyNominal +
+      hireCohorts.reduce((acc, cohort) => acc + cohort.count * rampFactor(index - cohort.monthIndex), 0);
 
-    const openOffset = inputs.leadTimeMonths + (inputs.hiringMode === "antecipado" ? Math.max(0, inputs.rampUpMonths - 1) : 0);
+    const preHireGapFte = Math.max(0, agentsNeeded - hcAvailableFromExisting);
+    const hire = Math.ceil(preHireGapFte);
+    const hcAvailableEffective = hcAvailableFromExisting + hire * rampFactor(0);
+    const capacityAvailableTotal = hcAvailableEffective * capacityPerAgent;
+
+    const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
+    const gap = Math.ceil(gapFte);
+    const turnover = turnoverByMonth.get(point.month) ?? 0;
+
+    if (hire > 0) {
+      hireCohorts.push({ monthIndex: index, count: hire });
+    }
+
+    let remainingTurnover = Math.min(turnover, hcInitial + hire);
+    const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
+    legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
+    remainingTurnover -= legacyTurnover;
+
+    for (let cohortIdx = 0; cohortIdx < hireCohorts.length && remainingTurnover > 0; cohortIdx += 1) {
+      const cohort = hireCohorts[cohortIdx];
+      const cohortTurnover = Math.min(cohort.count, remainingTurnover);
+      cohort.count -= cohortTurnover;
+      remainingTurnover -= cohortTurnover;
+    }
+
+    for (let cohortIdx = hireCohorts.length - 1; cohortIdx >= 0; cohortIdx -= 1) {
+      if (hireCohorts[cohortIdx].count <= 0) {
+        hireCohorts.splice(cohortIdx, 1);
+      }
+    }
+
+    const hcFinal = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
+
+    const openOffset = inputs.leadTimeMonths + (inputs.hiringMode === "antecipado" ? 2 : 0);
     const openMonthIndex = index - openOffset;
 
     const risk = gap === 0 ? "ok" : gap <= 1 ? "attention" : "critical";
@@ -124,10 +169,13 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
       volumeAI,
       volumeHuman,
       capacityPerAgent,
+      capacityAvailableTotal,
       agentsNeeded,
+      hcAvailableEffective,
       hcInitial,
       turnover,
       hcFinal,
+      gapFte,
       gap,
       hire,
       openIn: openMonthIndex >= 0 ? timeline[openMonthIndex].label : "Antes do período",
@@ -136,7 +184,6 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     });
 
     previousClients = clientsBase;
-    previousHcFinal = hcFinal;
   });
 
   const last = rows[rows.length - 1];

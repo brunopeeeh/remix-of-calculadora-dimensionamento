@@ -52,10 +52,13 @@ export interface MonthlyProjection {
   volumeAI: number;
   volumeHuman: number;
   capacityPerAgent: number;
+  capacityAvailableTotal: number;
   agentsNeeded: number;
+  hcAvailableEffective: number;
   hcInitial: number;
   turnover: number;
   hcFinal: number;
+  gapFte: number;
   gap: number;
   hire: number;
   openIn: string;
