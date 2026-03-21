@@ -456,6 +456,7 @@ const Index = () => {
               min={0}
               max={30}
               onChange={(value) => patch("turnoverAnnual", clamp(value, 0, 30))}
+              replaceValueOnFocus
             />
             <div className="space-y-2">
               <p className="text-xs font-medium">Distribuição mensal</p>
