@@ -28,24 +28,47 @@ const buildTimeline = (startMonth: number, endMonth: number): MonthPoint[] => {
   return timeline;
 };
 
-const distributeTurnover = (inputs: PlannerInputs, timeline: MonthPoint[]) => {
+const getTurnoverPeriodMonths = (period: PlannerInputs["turnoverPeriod"]) => {
+  if (period === "mensal") return 1;
+  if (period === "semestral") return 6;
+  return 12;
+};
+
+interface TurnoverContext {
+  activeTimelineKeySet: Set<string>;
+  distributionFactor: number;
+  periodMonths: number;
+}
+
+const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
   const activeTimelineKeys = timeline
     .map((point) => point.key)
     .filter((key, index, all) => inputs.turnoverMonths.includes(key) && all.indexOf(key) === index);
 
-  if (activeTimelineKeys.length === 0 || inputs.turnoverAnnual <= 0) {
-    return new Map<string, number>();
+  return {
+    activeTimelineKeySet: new Set(activeTimelineKeys),
+    distributionFactor: activeTimelineKeys.length > 0 ? timeline.length / activeTimelineKeys.length : 0,
+    periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
+  };
+};
+
+const resolveTurnoverForMonth = (
+  inputs: PlannerInputs,
+  turnoverContext: TurnoverContext,
+  monthKey: string,
+  hcAvailableEffective: number,
+) => {
+  if (inputs.turnoverValue <= 0 || !turnoverContext.activeTimelineKeySet.has(monthKey)) {
+    return 0;
   }
 
-  const base = Math.floor(inputs.turnoverAnnual / activeTimelineKeys.length);
-  const remainder = inputs.turnoverAnnual % activeTimelineKeys.length;
-  const map = new Map<string, number>();
+  if (inputs.turnoverInputMode === "percentual") {
+    const monthlyRate = (inputs.turnoverValue / 100) / turnoverContext.periodMonths;
+    return hcAvailableEffective * monthlyRate * turnoverContext.distributionFactor;
+  }
 
-  activeTimelineKeys.forEach((key, idx) => {
-    map.set(key, base + (idx < remainder ? 1 : 0));
-  });
-
-  return map;
+  const monthlyAbsolute = (inputs.turnoverValue / turnoverContext.periodMonths) * turnoverContext.distributionFactor;
+  return monthlyAbsolute;
 };
 
 const baseWeightedTma = 20 * 0.8 + 45 * 0.2;
@@ -104,7 +127,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     };
   }
 
-  const turnoverByMonth = distributeTurnover(inputs, timeline);
+  const turnoverContext = buildTurnoverContext(inputs, timeline);
   const totalSteps = Math.max(1, timeline.length - 1);
   const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
   const fallbackManualGrowth = fallbackManualGrowthPct(inputs, totalSteps);
@@ -156,7 +179,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
 
     const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
     const gap = Math.ceil(gapFte);
-    const turnover = turnoverByMonth.get(point.key) ?? 0;
+    const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, hcAvailableEffective);
 
     if (hire > 0) {
       hireCohorts.push({ monthIndex: index, count: hire });

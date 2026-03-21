@@ -19,7 +19,9 @@ const baseProjectionInput = {
   meetingsPct: 0,
   vacationPct: 0,
   vacationEligiblePct: 0,
-  turnoverAnnual: 0,
+  turnoverValue: 0,
+  turnoverPeriod: "anual" as const,
+  turnoverInputMode: "absoluto" as const,
   turnoverMonths: [],
   growthMode: "linear" as const,
   leadTimeMonths: 2,
@@ -89,7 +91,7 @@ describe("partial ramp-up 33/66/100", () => {
       meetingsPct: 0,
       vacationPct: 0,
       vacationEligiblePct: 0,
-      turnoverAnnual: 4,
+      turnoverValue: 4,
       turnoverMonths: ["2026-11", "2026-12", "2027-01", "2027-02"],
       growthMode: "linear",
       leadTimeMonths: 1,
@@ -109,7 +111,7 @@ describe("partial ramp-up 33/66/100", () => {
       contactRate: 2,
       growthMode: "linear",
       turnoverMonths: [],
-      turnoverAnnual: 0,
+      turnoverValue: 0,
     });
 
     expect(projection.rows[0].contactRate).toBe(2);
