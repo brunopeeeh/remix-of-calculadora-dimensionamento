@@ -36,6 +36,7 @@ const getTurnoverPeriodMonths = (period: PlannerInputs["turnoverPeriod"]) => {
 
 interface TurnoverContext {
   activeTimelineKeySet: Set<string>;
+  activeCount: number;
   distributionFactor: number;
   periodMonths: number;
 }
@@ -47,6 +48,7 @@ const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): Tu
 
   return {
     activeTimelineKeySet: new Set(activeTimelineKeys),
+    activeCount: activeTimelineKeys.length,
     distributionFactor: activeTimelineKeys.length > 0 ? timeline.length / activeTimelineKeys.length : 0,
     periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
   };
@@ -67,7 +69,7 @@ const resolveTurnoverForMonth = (
     return hcAvailableEffective * monthlyRate * turnoverContext.distributionFactor;
   }
 
-  const monthlyAbsolute = (inputs.turnoverValue / turnoverContext.periodMonths) * turnoverContext.distributionFactor;
+  const monthlyAbsolute = turnoverContext.activeCount > 0 ? inputs.turnoverValue / turnoverContext.activeCount : 0;
   return monthlyAbsolute;
 };
 
