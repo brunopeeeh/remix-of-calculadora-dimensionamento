@@ -1,6 +1,8 @@
 export type ScenarioKey = "base" | "otimista" | "pessimista";
 export type GrowthMode = "linear" | "manual";
 export type HiringMode = "gap" | "antecipado";
+export type TurnoverPeriod = "mensal" | "semestral" | "anual";
+export type TurnoverInputMode = "absoluto" | "percentual";
 
 export interface PlannerInputs {
   currentClients: number;
@@ -30,7 +32,9 @@ export interface PlannerInputs {
   vacationPct: number;
   vacationEligiblePct: number;
 
-  turnoverAnnual: number;
+  turnoverValue: number;
+  turnoverPeriod: TurnoverPeriod;
+  turnoverInputMode: TurnoverInputMode;
   turnoverMonths: string[];
 
   leadTimeMonths: number;
