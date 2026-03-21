@@ -27,6 +27,7 @@ export const MonthlyAuditPanel = ({ rows, contactRateSource, resolvedContactRate
               <TableHead className="whitespace-nowrap">agentsNeededRaw</TableHead>
               <TableHead className="whitespace-nowrap">gapFte</TableHead>
               <TableHead className="whitespace-nowrap">Fator rampa aplicado</TableHead>
+              <TableHead className="whitespace-nowrap">Turnover calculado</TableHead>
               <TableHead className="whitespace-nowrap">Origem do C.R.</TableHead>
             </TableRow>
           </TableHeader>
@@ -40,6 +41,10 @@ export const MonthlyAuditPanel = ({ rows, contactRateSource, resolvedContactRate
                   <TableCell className="mono-numbers">{formatDecimal(row.agentsNeededRaw, 2)}</TableCell>
                   <TableCell className="mono-numbers">{formatDecimal(row.gapFte, 2)}</TableCell>
                   <TableCell className="mono-numbers">{formatDecimal(appliedRampFactor, 2)}x</TableCell>
+                  <TableCell>
+                    <p className="mono-numbers">{formatDecimal(row.turnover, 2)}</p>
+                    <p className="text-[10px] text-muted-foreground">{row.turnoverFormula}</p>
+                  </TableCell>
                   <TableCell className="capitalize">{contactRateSource}</TableCell>
                 </TableRow>
               );

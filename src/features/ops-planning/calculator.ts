@@ -41,6 +41,19 @@ interface TurnoverContext {
   periodMonths: number;
 }
 
+const formatTurnoverPeriod = (period: PlannerInputs["turnoverPeriod"]) => {
+  if (period === "mensal") return "Mensal";
+  if (period === "semestral") return "Semestral";
+  return "Anual";
+};
+
+const formatTurnoverMode = (mode: PlannerInputs["turnoverInputMode"]) => {
+  if (mode === "percentual") return "Percentual";
+  return "Absoluto";
+};
+
+const formatAuditNumber = (value: number) => value.toFixed(2);
+
 const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
   const activeTimelineKeys = timeline
     .map((point) => point.key)
@@ -71,6 +84,32 @@ const resolveTurnoverForMonth = (
 
   const monthlyAbsolute = turnoverContext.activeCount > 0 ? inputs.turnoverValue / turnoverContext.activeCount : 0;
   return monthlyAbsolute;
+};
+
+const buildTurnoverFormula = (
+  inputs: PlannerInputs,
+  turnoverContext: TurnoverContext,
+  monthKey: string,
+  hcAvailableEffective: number,
+  turnover: number,
+) => {
+  const periodLabel = formatTurnoverPeriod(inputs.turnoverPeriod);
+  const modeLabel = formatTurnoverMode(inputs.turnoverInputMode);
+  const isActiveMonth = turnoverContext.activeTimelineKeySet.has(monthKey);
+
+  if (inputs.turnoverInputMode === "percentual") {
+    return `${modeLabel} ${periodLabel} | Base: HC disp. mês (${formatAuditNumber(hcAvailableEffective)}) | Fórmula: (${formatAuditNumber(inputs.turnoverValue)}% ÷ ${turnoverContext.periodMonths}) × ${formatAuditNumber(hcAvailableEffective)} × ${formatAuditNumber(turnoverContext.distributionFactor)} = ${formatAuditNumber(turnover)}`;
+  }
+
+  if (turnoverContext.activeCount === 0) {
+    return `${modeLabel} ${periodLabel} | Base: meses selecionados (0) | Fórmula: sem meses ativos = 0`;
+  }
+
+  if (!isActiveMonth) {
+    return `${modeLabel} ${periodLabel} | Base: meses selecionados (${turnoverContext.activeCount}) | Fórmula: mês inativo = 0`;
+  }
+
+  return `${modeLabel} ${periodLabel} | Base: meses selecionados (${turnoverContext.activeCount}) | Fórmula: ${formatAuditNumber(inputs.turnoverValue)} ÷ ${turnoverContext.activeCount} = ${formatAuditNumber(turnover)}`;
 };
 
 const baseWeightedTma = 20 * 0.8 + 45 * 0.2;
@@ -182,6 +221,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
     const gap = Math.ceil(gapFte);
     const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, hcAvailableEffective);
+    const turnoverFormula = buildTurnoverFormula(inputs, turnoverContext, point.key, hcAvailableEffective, turnover);
 
     if (hire > 0) {
       hireCohorts.push({ monthIndex: index, count: hire });
@@ -229,6 +269,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
       hcAvailableEffective,
       hcInitial,
       turnover,
+      turnoverFormula,
       hcFinal,
       gapFte,
       gap,

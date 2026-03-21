@@ -63,6 +63,7 @@ export interface MonthlyProjection {
   hcAvailableEffective: number;
   hcInitial: number;
   turnover: number;
+  turnoverFormula: string;
   hcFinal: number;
   gapFte: number;
   gap: number;
