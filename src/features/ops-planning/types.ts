@@ -10,7 +10,7 @@ export interface PlannerInputs {
   startMonth: number;
   endMonth: number;
   growthMode: GrowthMode;
-  manualGrowthByMonth: Record<number, number>;
+  manualGrowthByMonth: Record<string, number>;
 
   aiCoveragePct: number;
   aiGrowthMonthlyPct: number;
@@ -31,13 +31,14 @@ export interface PlannerInputs {
   vacationEligiblePct: number;
 
   turnoverAnnual: number;
-  turnoverMonths: number[];
+  turnoverMonths: string[];
 
   leadTimeMonths: number;
   hiringMode: HiringMode;
 }
 
 export interface MonthPoint {
+  key: string;
   month: number;
   year: number;
   label: string;
@@ -53,6 +54,7 @@ export interface MonthlyProjection {
   volumeHuman: number;
   capacityPerAgent: number;
   capacityAvailableTotal: number;
+  agentsNeededRaw: number;
   agentsNeeded: number;
   hcAvailableEffective: number;
   hcInitial: number;

@@ -4,6 +4,8 @@ import { MonthPoint, PlannerInputs, ProjectionResult } from "./types";
 const MONTH_LIMIT = 24;
 const BASE_YEAR = 2026;
 
+export const getTimelineKey = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
+
 const buildTimeline = (startMonth: number, endMonth: number): MonthPoint[] => {
   const timeline: MonthPoint[] = [];
   const start = new Date(BASE_YEAR, startMonth - 1, 1);
@@ -15,6 +17,7 @@ const buildTimeline = (startMonth: number, endMonth: number): MonthPoint[] => {
     const month = cursor.getMonth() + 1;
     const year = cursor.getFullYear();
     timeline.push({
+      key: getTimelineKey(year, month),
       month,
       year,
       label: `${monthNames[month - 1]}/${String(year).slice(-2)}`,
@@ -26,20 +29,20 @@ const buildTimeline = (startMonth: number, endMonth: number): MonthPoint[] => {
 };
 
 const distributeTurnover = (inputs: PlannerInputs, timeline: MonthPoint[]) => {
-  const activeMonths = timeline
-    .map((point) => point.month)
-    .filter((month, index, all) => inputs.turnoverMonths.includes(month) && all.indexOf(month) === index);
+  const activeTimelineKeys = timeline
+    .map((point) => point.key)
+    .filter((key, index, all) => inputs.turnoverMonths.includes(key) && all.indexOf(key) === index);
 
-  if (activeMonths.length === 0 || inputs.turnoverAnnual <= 0) {
-    return new Map<number, number>();
+  if (activeTimelineKeys.length === 0 || inputs.turnoverAnnual <= 0) {
+    return new Map<string, number>();
   }
 
-  const base = Math.floor(inputs.turnoverAnnual / activeMonths.length);
-  const remainder = inputs.turnoverAnnual % activeMonths.length;
-  const map = new Map<number, number>();
+  const base = Math.floor(inputs.turnoverAnnual / activeTimelineKeys.length);
+  const remainder = inputs.turnoverAnnual % activeTimelineKeys.length;
+  const map = new Map<string, number>();
 
-  activeMonths.forEach((month, idx) => {
-    map.set(month, base + (idx < remainder ? 1 : 0));
+  activeTimelineKeys.forEach((key, idx) => {
+    map.set(key, base + (idx < remainder ? 1 : 0));
   });
 
   return map;
@@ -47,17 +50,39 @@ const distributeTurnover = (inputs: PlannerInputs, timeline: MonthPoint[]) => {
 
 const baseWeightedTma = 20 * 0.8 + 45 * 0.2;
 
-const rampFactor = (monthsSinceHire: number) => {
+export const getRampFactor = (monthsSinceHire: number, rampUpMonths: number) => {
   if (monthsSinceHire < 0) return 0;
-  if (monthsSinceHire === 0) return 0.33;
-  if (monthsSinceHire === 1) return 0.66;
-  return 1;
+  if (rampUpMonths <= 1) return 1;
+  if (monthsSinceHire >= rampUpMonths - 1) return 1;
+  return (monthsSinceHire + 1) / rampUpMonths;
+};
+
+const getRampMaturationOffset = (rampUpMonths: number) => {
+  if (rampUpMonths <= 1) return 0;
+  return rampUpMonths - 1;
+};
+
+export const resolveContactRate = (inputs: PlannerInputs) => {
+  if (inputs.contactRate > 0) return inputs.contactRate;
+  if (inputs.currentClients <= 0) return 0;
+  return inputs.currentVolume / inputs.currentClients;
+};
+
+const fallbackManualGrowthPct = (inputs: PlannerInputs, totalSteps: number) => {
+  if (inputs.currentClients <= 0 || inputs.targetClientsQ4 <= 0) return 0;
+  return (Math.pow(inputs.targetClientsQ4 / inputs.currentClients, 1 / totalSteps) - 1) * 100;
 };
 
 interface HireCohort {
   monthIndex: number;
   count: number;
 }
+
+const computeRisk = (gap: number) => {
+  if (gap === 0) return "ok" as const;
+  if (gap <= 1) return "attention" as const;
+  return "critical" as const;
+};
 
 export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult => {
   const timeline = buildTimeline(inputs.startMonth, inputs.endMonth);
@@ -82,7 +107,8 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
   const turnoverByMonth = distributeTurnover(inputs, timeline);
   const totalSteps = Math.max(1, timeline.length - 1);
   const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
-  const fallbackManualGrowth = (Math.pow(inputs.targetClientsQ4 / inputs.currentClients, 1 / totalSteps) - 1) * 100;
+  const fallbackManualGrowth = fallbackManualGrowthPct(inputs, totalSteps);
+  const contactRate = resolveContactRate(inputs);
 
   const mixN1 = inputs.mixN1Pct / 100;
   const mixN2 = inputs.mixN2Pct / 100;
@@ -108,28 +134,29 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
         ? inputs.currentClients
         : inputs.growthMode === "linear"
           ? inputs.currentClients + linearStep * index
-          : previousClients * (1 + (inputs.manualGrowthByMonth[point.month] ?? fallbackManualGrowth) / 100);
+          : previousClients * (1 + (inputs.manualGrowthByMonth[point.key] ?? fallbackManualGrowth) / 100);
 
-    const volumeGross = clientsBase * inputs.contactRate;
+    const volumeGross = clientsBase * contactRate;
     const aiPct = clamp(inputs.aiCoveragePct + inputs.aiGrowthMonthlyPct * index + inputs.extraAutomationPct, 0, 95);
     const volumeAI = volumeGross * (aiPct / 100);
     const volumeHuman = volumeGross - volumeAI;
 
-    const agentsNeeded = Math.ceil(volumeHuman / Math.max(1, capacityPerAgent));
+    const agentsNeededRaw = volumeHuman / Math.max(1, capacityPerAgent);
+    const agentsNeeded = Math.ceil(agentsNeededRaw);
 
     const hcInitial = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
     const hcAvailableFromExisting =
       legacyNominal +
-      hireCohorts.reduce((acc, cohort) => acc + cohort.count * rampFactor(index - cohort.monthIndex), 0);
+      hireCohorts.reduce((acc, cohort) => acc + cohort.count * getRampFactor(index - cohort.monthIndex, inputs.rampUpMonths), 0);
 
     const preHireGapFte = Math.max(0, agentsNeeded - hcAvailableFromExisting);
     const hire = Math.ceil(preHireGapFte);
-    const hcAvailableEffective = hcAvailableFromExisting + hire * rampFactor(0);
+    const hcAvailableEffective = hcAvailableFromExisting + hire * getRampFactor(0, inputs.rampUpMonths);
     const capacityAvailableTotal = hcAvailableEffective * capacityPerAgent;
 
     const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
     const gap = Math.ceil(gapFte);
-    const turnover = turnoverByMonth.get(point.month) ?? 0;
+    const turnover = turnoverByMonth.get(point.key) ?? 0;
 
     if (hire > 0) {
       hireCohorts.push({ monthIndex: index, count: hire });
@@ -155,21 +182,24 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
 
     const hcFinal = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
 
-    const openOffset = inputs.leadTimeMonths + (inputs.hiringMode === "antecipado" ? 2 : 0);
+    const openOffset =
+      inputs.leadTimeMonths +
+      (inputs.hiringMode === "antecipado" ? getRampMaturationOffset(inputs.rampUpMonths) : 0);
     const openMonthIndex = index - openOffset;
 
-    const risk = gap === 0 ? "ok" : gap <= 1 ? "attention" : "critical";
+    const risk = computeRisk(gap);
 
     rows.push({
       month: point,
       clientsBase,
-      contactRate: inputs.contactRate,
+      contactRate,
       volumeGross,
       aiPct,
       volumeAI,
       volumeHuman,
       capacityPerAgent,
       capacityAvailableTotal,
+      agentsNeededRaw,
       agentsNeeded,
       hcAvailableEffective,
       hcInitial,
