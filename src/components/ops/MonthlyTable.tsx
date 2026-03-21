@@ -28,7 +28,7 @@ export const MonthlyTable = ({ rows }: MonthlyTableProps) => {
                 "Volume humano",
                 "Capacidade efetiva/agente",
                 "Agentes necessários",
-                "HC inicial",
+                "HC efetivo",
                 "Turnover",
                 "HC final",
                 "Gap",
@@ -53,7 +53,7 @@ export const MonthlyTable = ({ rows }: MonthlyTableProps) => {
                 <td className="mono-numbers px-3 py-2">{formatInt(row.volumeHuman)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.capacityPerAgent)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.agentsNeeded)}</td>
-                <td className="mono-numbers px-3 py-2">{formatInt(row.hcInitial)}</td>
+                <td className="mono-numbers px-3 py-2">{formatDecimal(row.hcAvailableEffective, 2)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.turnover)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.hcFinal)}</td>
                 <td className="mono-numbers px-3 py-2">

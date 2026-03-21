@@ -115,7 +115,7 @@ const Index = () => {
     volumeIA: row.volumeAI,
     volumeHumano: row.volumeHuman,
     agentesNecessarios: row.agentsNeeded,
-    hcDisponivel: row.hcInitial,
+    hcDisponivel: row.hcAvailableEffective,
     gap: row.gap,
     produtividadeNominal: inputs.productivityBase,
     perdaPausas: inputs.productivityBase * (inputs.breaksPct / 100),
@@ -532,7 +532,7 @@ const Index = () => {
             <KPIWidget
               title="Mês crítico para abrir vaga"
               subtitle="Último mês para contratação sem atraso operacional"
-              tooltip="Mês da necessidade - lead time (- ramp-up quando antecipado)"
+              tooltip="Mês da necessidade - lead time - rampa parcial de onboarding (33/66/100)"
               value={projection.summary.criticalOpenMonth}
               tone={projection.summary.riskMonths.length > 0 ? "risk" : "success"}
             />
@@ -556,7 +556,7 @@ const Index = () => {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Evolução de headcount" subtitle="Agentes necessários, HC disponível e gap mensal">
+            <ChartCard title="Evolução de headcount" subtitle="Agentes necessários, HC efetivo (rampa 33/66/100) e gap mensal">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartRows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -565,7 +565,7 @@ const Index = () => {
                   <Tooltip formatter={(value: number) => formatInt(value)} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="agentesNecessarios" fill="hsl(var(--chart-info))" radius={[4, 4, 0, 0]} name="Agentes necessários" />
-                  <Bar dataKey="hcDisponivel" fill="hsl(var(--chart-success))" radius={[4, 4, 0, 0]} name="HC disponível" />
+                  <Bar dataKey="hcDisponivel" fill="hsl(var(--chart-success))" radius={[4, 4, 0, 0]} name="HC efetivo" />
                   <Line type="monotone" dataKey="gap" stroke="hsl(var(--chart-danger))" strokeWidth={2} dot={false} name="Gap" />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -603,7 +603,7 @@ const Index = () => {
           <MonthlyTable rows={projection.rows} />
 
           <p className={cn("text-xs text-muted-foreground", projection.summary.riskMonths.length ? "text-warning" : "text-success")}>
-            Modelo pronto para evolução de rampa parcial futura (mês 1 = 0%, mês 2 = 50%, mês 3+ = 100%).
+            Rampa parcial ativa no modelo (mês 1 = 33%, mês 2 = 66%, mês 3+ = 100%).
           </p>
         </main>
       </div>
