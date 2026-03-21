@@ -22,6 +22,7 @@ import { Header } from "@/components/ops/Header";
 import { HiringTimeline } from "@/components/ops/HiringTimeline";
 import { InsightBanner } from "@/components/ops/InsightBanner";
 import { KPIWidget } from "@/components/ops/KPIWidget";
+import { MonthlyAuditPanel } from "@/components/ops/MonthlyAuditPanel";
 import { MonthlyTable } from "@/components/ops/MonthlyTable";
 import { RangeNumberField } from "@/components/ops/RangeNumberField";
 import { SidebarSection } from "@/components/ops/SidebarSection";
@@ -81,6 +82,8 @@ const Index = () => {
 
   const projection = useMemo(() => runPlannerProjection(inputs), [inputs]);
   const inferredContactRate = inputs.currentClients > 0 ? inputs.currentVolume / inputs.currentClients : 0;
+  const resolvedContactRate = inputs.contactRate > 0 ? inputs.contactRate : inferredContactRate;
+  const contactRateSource = inputs.contactRate > 0 ? "manual" : "inferido";
   const contactRateDriftPct =
     inferredContactRate > 0 ? Math.abs(inputs.contactRate - inferredContactRate) / inferredContactRate * 100 : 0;
 
@@ -609,6 +612,12 @@ const Index = () => {
           </section>
 
           <HiringTimeline rows={projection.rows} />
+
+          <MonthlyAuditPanel
+            rows={projection.rows}
+            contactRateSource={contactRateSource}
+            resolvedContactRate={resolvedContactRate}
+          />
 
           <MonthlyTable rows={projection.rows} />
 
