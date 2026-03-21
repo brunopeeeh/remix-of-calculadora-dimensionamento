@@ -449,14 +449,74 @@ const Index = () => {
           </SidebarSection>
 
           <SidebarSection title="Turnover" description="Saídas estimadas ao longo do ano">
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Período de cálculo</p>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inputs.turnoverPeriod === "mensal" ? "default" : "outline"}
+                  onClick={() => patch("turnoverPeriod", "mensal")}
+                >
+                  Mensal
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inputs.turnoverPeriod === "semestral" ? "default" : "outline"}
+                  onClick={() => patch("turnoverPeriod", "semestral")}
+                >
+                  Semestral
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inputs.turnoverPeriod === "anual" ? "default" : "outline"}
+                  onClick={() => patch("turnoverPeriod", "anual")}
+                >
+                  Anual
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Formato do valor</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inputs.turnoverInputMode === "absoluto" ? "default" : "outline"}
+                  onClick={() => patch("turnoverInputMode", "absoluto")}
+                >
+                  Absoluto
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inputs.turnoverInputMode === "percentual" ? "default" : "outline"}
+                  onClick={() => patch("turnoverInputMode", "percentual")}
+                >
+                  Percentual
+                </Button>
+              </div>
+            </div>
+
             <SimpleNumberField
-              label="Turnover anual"
-              description="Quantidade estimada de saídas ao longo do ano"
-              tooltip="Distribuído nos meses marcados"
-              value={inputs.turnoverAnnual}
+              label={`Turnover ${inputs.turnoverPeriod}`}
+              description={
+                inputs.turnoverInputMode === "percentual"
+                  ? "Taxa em % (base: HC disponível do mês)"
+                  : "Quantidade de saídas no período selecionado"
+              }
+              tooltip={
+                inputs.turnoverInputMode === "percentual"
+                  ? "A taxa é convertida para base mensal e aplicada sobre o HC disponível nos meses marcados."
+                  : "O valor absoluto é convertido para base mensal e distribuído nos meses marcados."
+              }
+              value={inputs.turnoverValue}
               min={0}
-              max={30}
-              onChange={(value) => patch("turnoverAnnual", clamp(value, 0, 30))}
+              max={inputs.turnoverInputMode === "percentual" ? 100 : 200}
+              onChange={(value) => patch("turnoverValue", clamp(value, 0, inputs.turnoverInputMode === "percentual" ? 100 : 200))}
               replaceValueOnFocus
             />
             <div className="space-y-2">
