@@ -47,6 +47,7 @@ export const RangeNumberField = ({
           min={min}
           max={max}
           step={step}
+          onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => onChange(Number(event.target.value))}
           className="mono-numbers h-8"
         />
