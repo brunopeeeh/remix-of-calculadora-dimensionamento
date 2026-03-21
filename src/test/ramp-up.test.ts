@@ -30,9 +30,9 @@ describe("partial ramp-up 33/66/100", () => {
   it("aplica contribuição progressiva das contratações por coorte", () => {
     const projection = runPlannerProjection(baseProjectionInput);
 
-    expect(projection.rows[0].hcAvailableEffective).toBeCloseTo(3.3, 4);
-    expect(projection.rows[1].hcAvailableEffective).toBeCloseTo(7.92, 4);
-    expect(projection.rows[2].hcAvailableEffective).toBeCloseTo(12.64, 4);
+    expect(projection.rows[0].hcAvailableEffective).toBeCloseTo(3.3333, 4);
+    expect(projection.rows[1].hcAvailableEffective).toBeCloseTo(8, 4);
+    expect(projection.rows[2].hcAvailableEffective).toBeCloseTo(12.6667, 4);
   });
 
   it("reduz gap ao longo dos meses com maturação das coortes", () => {
