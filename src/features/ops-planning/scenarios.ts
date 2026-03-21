@@ -1,6 +1,10 @@
 import { PlannerInputs, ScenarioKey } from "./types";
 
-const baseManualGrowth: Record<number, number> = {
+const BASE_YEAR = 2026;
+
+const toTimelineKey = (month: number, year = BASE_YEAR) => `${year}-${String(month).padStart(2, "0")}`;
+
+const baseManualGrowthByMonth: Record<number, number> = {
   3: 3.4,
   4: 3.4,
   5: 3.6,
@@ -12,6 +16,12 @@ const baseManualGrowth: Record<number, number> = {
   11: 4,
   12: 4,
 };
+
+const baseManualGrowth = Object.fromEntries(
+  Object.entries(baseManualGrowthByMonth).map(([month, growth]) => [toTimelineKey(Number(month)), growth]),
+);
+
+const defaultTurnoverMonths = [5, 8, 11].map((month) => toTimelineKey(month));
 
 export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
   base: {
@@ -43,7 +53,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationEligiblePct: 70,
 
     turnoverAnnual: 3,
-    turnoverMonths: [5, 8, 11],
+    turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
     hiringMode: "antecipado",
@@ -77,7 +87,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationEligiblePct: 65,
 
     turnoverAnnual: 2,
-    turnoverMonths: [5, 8, 11],
+    turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
     hiringMode: "antecipado",
@@ -111,7 +121,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationEligiblePct: 75,
 
     turnoverAnnual: 4,
-    turnoverMonths: [5, 8, 11],
+    turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 3,
     hiringMode: "gap",
