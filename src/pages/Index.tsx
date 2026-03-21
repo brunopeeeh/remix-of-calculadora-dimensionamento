@@ -48,6 +48,7 @@ const SimpleNumberField = ({
   min,
   max,
   step = 1,
+  replaceValueOnFocus = false,
 }: {
   label: string;
   description: string;
@@ -57,6 +58,7 @@ const SimpleNumberField = ({
   min?: number;
   max?: number;
   step?: number;
+  replaceValueOnFocus?: boolean;
 }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between gap-2">
@@ -70,6 +72,11 @@ const SimpleNumberField = ({
       max={max}
       step={step}
       onChange={(event) => onChange(Number(event.target.value))}
+      onFocus={(event) => {
+        if (replaceValueOnFocus) {
+          event.currentTarget.select();
+        }
+      }}
       className="mono-numbers h-8"
     />
     <p className="text-[11px] text-muted-foreground">{description}</p>
@@ -449,6 +456,7 @@ const Index = () => {
               min={0}
               max={30}
               onChange={(value) => patch("turnoverAnnual", clamp(value, 0, 30))}
+              replaceValueOnFocus
             />
             <div className="space-y-2">
               <p className="text-xs font-medium">Distribuição mensal</p>
