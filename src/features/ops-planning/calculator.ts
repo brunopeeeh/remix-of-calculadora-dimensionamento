@@ -81,7 +81,7 @@ interface HireCohort {
 const computeRisk = (gap: number) => {
   if (gap === 0) return "ok" as const;
   if (gap <= 1) return "attention" as const;
-  return 1;
+  return "critical" as const;
 };
 
 export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult => {
