@@ -52,7 +52,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationPct: 9,
     vacationEligiblePct: 70,
 
-    turnoverAnnual: 3,
+    turnoverValue: 3,
+    turnoverPeriod: "anual",
+    turnoverInputMode: "absoluto",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
@@ -86,7 +88,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationPct: 8,
     vacationEligiblePct: 65,
 
-    turnoverAnnual: 2,
+    turnoverValue: 2,
+    turnoverPeriod: "anual",
+    turnoverInputMode: "absoluto",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
@@ -120,7 +124,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     vacationPct: 11,
     vacationEligiblePct: 75,
 
-    turnoverAnnual: 4,
+    turnoverValue: 4,
+    turnoverPeriod: "anual",
+    turnoverInputMode: "absoluto",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 3,
