@@ -134,6 +134,43 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
   },
 };
 
+export const EMPTY_PLANNER_INPUTS: PlannerInputs = {
+  currentClients: 0,
+  targetClientsQ4: 0,
+  currentVolume: 0,
+  contactRate: 0,
+  startMonth: 3,
+  endMonth: 12,
+  growthMode: "linear",
+  manualGrowthByMonth: {},
+
+  aiCoveragePct: 0,
+  aiGrowthMonthlyPct: 0,
+  extraAutomationPct: 0,
+
+  headcountCurrent: 0,
+  productivityBase: 0,
+  rampUpMonths: 3,
+  tmaN1: 20,
+  tmaN2: 45,
+  mixN1Pct: 80,
+  mixN2Pct: 20,
+
+  breaksPct: 0,
+  offchatPct: 0,
+  meetingsPct: 0,
+  vacationPct: 0,
+  vacationEligiblePct: 0,
+
+  turnoverValue: 0,
+  turnoverPeriod: "anual",
+  turnoverInputMode: "absoluto",
+  turnoverMonths: [],
+
+  leadTimeMonths: 0,
+  hiringMode: "gap",
+};
+
 export const scenarioLabels: Record<ScenarioKey, string> = {
   base: "Base",
   otimista: "Otimista",

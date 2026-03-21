@@ -29,7 +29,7 @@ import { SidebarSection } from "@/components/ops/SidebarSection";
 import { TooltipInfo } from "@/components/ops/TooltipInfo";
 import { clamp, formatDecimal, formatInt, monthNames } from "@/features/ops-planning/format";
 import { runPlannerProjection } from "@/features/ops-planning/calculator";
-import { SCENARIO_PRESETS } from "@/features/ops-planning/scenarios";
+import { EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "@/features/ops-planning/scenarios";
 import { PlannerInputs, ScenarioKey } from "@/features/ops-planning/types";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +112,11 @@ const Index = () => {
     setInputs(cloneInputs(SCENARIO_PRESETS.base));
   };
 
+  const handleClearAll = () => {
+    setScenario("base");
+    setInputs(cloneInputs(EMPTY_PLANNER_INPUTS));
+  };
+
   const toggleTurnoverMonth = (monthKey: string) => {
     setInputs((prev) => {
       const active = prev.turnoverMonths.includes(monthKey);
@@ -155,7 +160,13 @@ const Index = () => {
 
   return (
     <div className="ops-shell">
-      <Header scenario={scenario} onScenarioChange={handleScenarioChange} onReset={handleRestoreBase} periodLabel={periodLabel} />
+      <Header
+        scenario={scenario}
+        onScenarioChange={handleScenarioChange}
+        onReset={handleRestoreBase}
+        onClearAll={handleClearAll}
+        periodLabel={periodLabel}
+      />
 
       <div className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 lg:grid-cols-[320px_1fr] lg:gap-6 lg:px-6">
         <aside className="space-y-3 lg:sticky lg:top-[74px] lg:h-[calc(100vh-90px)] lg:overflow-auto lg:pb-10">

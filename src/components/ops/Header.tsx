@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { Eraser, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScenarioSelector } from "./ScenarioSelector";
 import { ScenarioKey } from "@/features/ops-planning/types";
@@ -7,10 +7,11 @@ interface HeaderProps {
   scenario: ScenarioKey;
   onScenarioChange: (scenario: ScenarioKey) => void;
   onReset: () => void;
+  onClearAll: () => void;
   periodLabel: string;
 }
 
-export const Header = ({ scenario, onScenarioChange, onReset, periodLabel }: HeaderProps) => {
+export const Header = ({ scenario, onScenarioChange, onReset, onClearAll, periodLabel }: HeaderProps) => {
   return (
     <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-6">
@@ -24,6 +25,10 @@ export const Header = ({ scenario, onScenarioChange, onReset, periodLabel }: Hea
           <Button variant="outline" size="sm" onClick={onReset} className="gap-2">
             <RotateCcw className="h-3.5 w-3.5" />
             Restaurar premissas padrão
+          </Button>
+          <Button variant="outline" size="sm" onClick={onClearAll} className="gap-2">
+            <Eraser className="h-3.5 w-3.5" />
+            Zerar todos os dados
           </Button>
           <span className="inline-flex items-center gap-2 rounded-md border bg-card px-2.5 py-1 text-xs text-muted-foreground">
             <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" /> Atualização automática
