@@ -48,7 +48,7 @@ const SimpleNumberField = ({
   min,
   max,
   step = 1,
-  replaceValueOnFocus = false,
+  replaceValueOnFocus = true,
 }: {
   label: string;
   description: string;
@@ -268,6 +268,7 @@ const Index = () => {
                     <Input
                       type="number"
                       value={inputs.manualGrowthByMonth[point.key] ?? 0}
+                       onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) =>
                         setInputs((prev) => ({
                           ...prev,
