@@ -1,5 +1,16 @@
 import { Eraser, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ScenarioSelector } from "./ScenarioSelector";
 import { ScenarioKey } from "@/features/ops-planning/types";
 
@@ -26,10 +37,26 @@ export const Header = ({ scenario, onScenarioChange, onReset, onClearAll, period
             <RotateCcw className="h-3.5 w-3.5" />
             Restaurar premissas padrão
           </Button>
-          <Button variant="outline" size="sm" onClick={onClearAll} className="gap-2">
-            <Eraser className="h-3.5 w-3.5" />
-            Zerar todos os dados
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Eraser className="h-3.5 w-3.5" />
+                Zerar todos os dados
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Deseja zerar todos os dados?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Essa ação limpa as premissas preenchidas e volta os campos para um estado vazio.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={onClearAll}>Sim, zerar dados</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <span className="inline-flex items-center gap-2 rounded-md border bg-card px-2.5 py-1 text-xs text-muted-foreground">
             <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" /> Atualização automática
           </span>
