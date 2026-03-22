@@ -34,6 +34,7 @@ import {
   parseLooseNumber,
   isTransientNumericInput,
 } from "@/features/ops-planning/number-input";
+import { NumberFormattingProvider, useNumberFormatting } from "@/features/ops-planning/number-formatting-context";
 import { runPlannerProjection } from "@/features/ops-planning/calculator";
 import { EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "@/features/ops-planning/scenarios";
 import { PlannerInputs, ScenarioKey } from "@/features/ops-planning/types";
@@ -70,14 +71,17 @@ const SimpleNumberField = ({
   decimalDigits?: number;
   replaceValueOnFocus?: boolean;
 }) => {
+  const formatDisplay = useNumberFormatting();
   const resolvedDecimalDigits = decimalDigits ?? (formatType === "decimal" ? 2 : 0);
+  const toDisplayValue = (next: number) =>
+    formatDisplay ? formatNumberForDisplay(next, formatType, resolvedDecimalDigits) : String(next);
   const [draftValue, setDraftValue] = useState(
-    formatNumberForDisplay(value, formatType, resolvedDecimalDigits),
+    toDisplayValue(value),
   );
 
   useEffect(() => {
-    setDraftValue(formatNumberForDisplay(value, formatType, resolvedDecimalDigits));
-  }, [value, formatType, resolvedDecimalDigits]);
+    setDraftValue(toDisplayValue(value));
+  }, [value, formatType, resolvedDecimalDigits, formatDisplay]);
 
   const commitValue = () => {
     const normalized = draftValue.trim();
@@ -85,13 +89,13 @@ const SimpleNumberField = ({
     if (isTransientNumericInput(normalized)) {
       const fallback = min ?? 0;
       onChange(fallback);
-      setDraftValue(formatNumberForDisplay(fallback, formatType, resolvedDecimalDigits));
+      setDraftValue(toDisplayValue(fallback));
       return;
     }
 
     const parsed = parseLooseNumber(normalized);
     if (!Number.isFinite(parsed)) {
-      setDraftValue(formatNumberForDisplay(value, formatType, resolvedDecimalDigits));
+      setDraftValue(toDisplayValue(value));
       return;
     }
 
@@ -99,7 +103,7 @@ const SimpleNumberField = ({
     const boundedMax = max ?? Number.POSITIVE_INFINITY;
     const next = Math.min(Math.max(parsed, boundedMin), boundedMax);
     onChange(next);
-    setDraftValue(formatNumberForDisplay(next, formatType, resolvedDecimalDigits));
+    setDraftValue(toDisplayValue(next));
   };
 
   const normalizedDraft = draftValue.trim();
@@ -158,6 +162,7 @@ const SimpleNumberField = ({
 const Index = () => {
   const [scenario, setScenario] = useState<ScenarioKey>("base");
   const [inputs, setInputs] = useState<PlannerInputs>(cloneInputs(SCENARIO_PRESETS.base));
+  const [advancedFormatting, setAdvancedFormatting] = useState(true);
 
   const projection = useMemo(() => runPlannerProjection(inputs), [inputs]);
   const inferredContactRate = inputs.currentClients > 0 ? inputs.currentVolume / inputs.currentClients : 0;
@@ -231,7 +236,8 @@ const Index = () => {
   ];
 
   return (
-    <div className="ops-shell">
+    <NumberFormattingProvider value={advancedFormatting}>
+      <div className="ops-shell">
       <Header
         scenario={scenario}
         onScenarioChange={handleScenarioChange}
@@ -242,6 +248,25 @@ const Index = () => {
 
       <div className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 lg:grid-cols-[320px_1fr] lg:gap-6 lg:px-6">
         <aside className="space-y-3 lg:sticky lg:top-[74px] lg:h-[calc(100vh-90px)] lg:overflow-auto lg:pb-10">
+          <SidebarSection title="Experiência de entrada" description="Controle visual de máscara numérica">
+            <div className="space-y-2 rounded-md border bg-card px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium">Formato avançado</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={advancedFormatting ? "default" : "outline"}
+                  onClick={() => setAdvancedFormatting((prev) => !prev)}
+                >
+                  {advancedFormatting ? "Ativado" : "Desativado"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Ativado: exibe máscara pt-BR no blur. Desativado: mantém números crus.
+              </p>
+            </div>
+          </SidebarSection>
+
           <SidebarSection
             title="Demanda"
             description="Drivers de crescimento de base e volume de contatos"
@@ -780,7 +805,8 @@ const Index = () => {
           </p>
         </main>
       </div>
-    </div>
+      </div>
+    </NumberFormattingProvider>
   );
 };
 

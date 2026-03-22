@@ -9,6 +9,7 @@ import {
   NumberFieldFormat,
   parseLooseNumber,
 } from "@/features/ops-planning/number-input";
+import { useNumberFormatting } from "@/features/ops-planning/number-formatting-context";
 
 interface RangeNumberFieldProps {
   label: string;
@@ -37,35 +38,40 @@ export const RangeNumberField = ({
   suffix,
   tooltip,
 }: RangeNumberFieldProps) => {
+  const formatDisplay = useNumberFormatting();
   const resolvedFormatType = formatType ?? (Number.isInteger(step) ? "integer" : "decimal");
   const resolvedDecimalDigits =
     decimalDigits ?? (resolvedFormatType === "decimal" ? inferDecimalDigitsFromStep(step, 2) : 0);
+  const toDisplayValue = (next: number) =>
+    formatDisplay
+      ? formatNumberForDisplay(next, resolvedFormatType, resolvedDecimalDigits)
+      : String(next);
   const [draftValue, setDraftValue] = useState(
-    formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits),
+    toDisplayValue(value),
   );
 
   useEffect(() => {
-    setDraftValue(formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits));
-  }, [value, resolvedFormatType, resolvedDecimalDigits]);
+    setDraftValue(toDisplayValue(value));
+  }, [value, resolvedFormatType, resolvedDecimalDigits, formatDisplay]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim();
 
     if (isTransientNumericInput(normalized)) {
       onChange(min);
-      setDraftValue(formatNumberForDisplay(min, resolvedFormatType, resolvedDecimalDigits));
+      setDraftValue(toDisplayValue(min));
       return;
     }
 
     const parsed = parseLooseNumber(normalized);
     if (!Number.isFinite(parsed)) {
-      setDraftValue(formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits));
+      setDraftValue(toDisplayValue(value));
       return;
     }
 
     const next = Math.min(Math.max(parsed, min), max);
     onChange(next);
-    setDraftValue(formatNumberForDisplay(next, resolvedFormatType, resolvedDecimalDigits));
+    setDraftValue(toDisplayValue(next));
   };
 
   const normalizedDraft = draftValue.trim();
@@ -102,7 +108,7 @@ export const RangeNumberField = ({
           onChange={(event) => {
             const next = Number(event.target.value);
             onChange(next);
-             setDraftValue(formatNumberForDisplay(next, resolvedFormatType, resolvedDecimalDigits));
+             setDraftValue(toDisplayValue(next));
           }}
           className="w-full accent-primary"
         />
@@ -111,8 +117,10 @@ export const RangeNumberField = ({
            inputMode={resolvedFormatType === "decimal" ? "decimal" : "numeric"}
           value={draftValue}
            data-step={step}
-          onFocus={(event) => event.currentTarget.select()}
-           onFocusCapture={() => setDraftValue(String(value))}
+           onFocus={(event) => {
+             setDraftValue(String(value));
+             event.currentTarget.select();
+           }}
           onChange={(event) => setDraftValue(event.target.value)}
           onBlur={commitNumberInput}
           onKeyDown={(event) => {
