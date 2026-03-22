@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { TooltipInfo } from "./TooltipInfo";
+import { cn } from "@/lib/utils";
 
 interface RangeNumberFieldProps {
   label: string;
@@ -51,6 +52,22 @@ export const RangeNumberField = ({
     setDraftValue(String(next));
   };
 
+  const normalizedDraft = draftValue.trim();
+  const parsedDraft = Number(normalizedDraft);
+  const hasDraft = normalizedDraft.length > 0;
+  const isDraftNumeric = hasDraft && Number.isFinite(parsedDraft);
+  const isBelowMin = isDraftNumeric && parsedDraft < min;
+  const isAboveMax = isDraftNumeric && parsedDraft > max;
+  const isInvalidValue = hasDraft && !isDraftNumeric;
+
+  const validationMessage = isInvalidValue
+    ? "Digite um número válido."
+    : isBelowMin
+      ? `Valor mínimo: ${min}.`
+      : isAboveMax
+        ? `Valor máximo: ${max}.`
+        : null;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -86,13 +103,18 @@ export const RangeNumberField = ({
               event.currentTarget.blur();
             }
           }}
-          className="mono-numbers h-8"
+          aria-invalid={Boolean(validationMessage)}
+          className={cn(
+            "mono-numbers h-8",
+            validationMessage && "border-destructive focus-visible:ring-destructive",
+          )}
         />
       </div>
 
       <p className="text-[11px] text-muted-foreground">
         {description} {suffix ? `(${suffix})` : ""}
       </p>
+      {validationMessage ? <p className="text-[11px] text-destructive">{validationMessage}</p> : null}
     </div>
   );
 };
