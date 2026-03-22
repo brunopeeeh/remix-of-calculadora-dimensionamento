@@ -28,13 +28,16 @@ import { RangeNumberField } from "@/components/ops/RangeNumberField";
 import { SidebarSection } from "@/components/ops/SidebarSection";
 import { TooltipInfo } from "@/components/ops/TooltipInfo";
 import { clamp, formatDecimal, formatInt, monthNames } from "@/features/ops-planning/format";
+import {
+  formatNumberForDisplay,
+  NumberFieldFormat,
+  parseLooseNumber,
+  isTransientNumericInput,
+} from "@/features/ops-planning/number-input";
 import { runPlannerProjection } from "@/features/ops-planning/calculator";
 import { EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "@/features/ops-planning/scenarios";
 import { PlannerInputs, ScenarioKey } from "@/features/ops-planning/types";
 import { cn } from "@/lib/utils";
-
-const formatInputNumber = (value: number) =>
-  Number.isInteger(value) ? String(value) : value.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
 
 const cloneInputs = (source: PlannerInputs): PlannerInputs => ({
   ...source,
@@ -51,6 +54,8 @@ const SimpleNumberField = ({
   min,
   max,
   step = 1,
+  formatType = "integer",
+  decimalDigits,
   replaceValueOnFocus = true,
 }: {
   label: string;
@@ -61,27 +66,32 @@ const SimpleNumberField = ({
   min?: number;
   max?: number;
   step?: number;
+  formatType?: NumberFieldFormat;
+  decimalDigits?: number;
   replaceValueOnFocus?: boolean;
 }) => {
-  const [draftValue, setDraftValue] = useState(String(value));
+  const resolvedDecimalDigits = decimalDigits ?? (formatType === "decimal" ? 2 : 0);
+  const [draftValue, setDraftValue] = useState(
+    formatNumberForDisplay(value, formatType, resolvedDecimalDigits),
+  );
 
   useEffect(() => {
-    setDraftValue(String(value));
-  }, [value]);
+    setDraftValue(formatNumberForDisplay(value, formatType, resolvedDecimalDigits));
+  }, [value, formatType, resolvedDecimalDigits]);
 
   const commitValue = () => {
     const normalized = draftValue.trim();
 
-    if (normalized === "" || normalized === "-" || normalized === "." || normalized === "-.") {
+    if (isTransientNumericInput(normalized)) {
       const fallback = min ?? 0;
       onChange(fallback);
-      setDraftValue(String(fallback));
+      setDraftValue(formatNumberForDisplay(fallback, formatType, resolvedDecimalDigits));
       return;
     }
 
-    const parsed = Number(normalized);
+    const parsed = parseLooseNumber(normalized);
     if (!Number.isFinite(parsed)) {
-      setDraftValue(String(value));
+      setDraftValue(formatNumberForDisplay(value, formatType, resolvedDecimalDigits));
       return;
     }
 
@@ -89,23 +99,24 @@ const SimpleNumberField = ({
     const boundedMax = max ?? Number.POSITIVE_INFINITY;
     const next = Math.min(Math.max(parsed, boundedMin), boundedMax);
     onChange(next);
-    setDraftValue(String(next));
+    setDraftValue(formatNumberForDisplay(next, formatType, resolvedDecimalDigits));
   };
 
   const normalizedDraft = draftValue.trim();
-  const parsedDraft = Number(normalizedDraft);
   const hasDraft = normalizedDraft.length > 0;
-  const isDraftNumeric = hasDraft && Number.isFinite(parsedDraft);
+  const isTransient = isTransientNumericInput(normalizedDraft);
+  const parsedDraft = !isTransient ? parseLooseNumber(normalizedDraft) : null;
+  const isDraftNumeric = hasDraft && !isTransient && Number.isFinite(parsedDraft);
   const isBelowMin = isDraftNumeric && min !== undefined && parsedDraft < min;
   const isAboveMax = isDraftNumeric && max !== undefined && parsedDraft > max;
-  const isInvalidValue = hasDraft && !isDraftNumeric;
+  const isInvalidValue = hasDraft && !isTransient && !isDraftNumeric;
 
   const validationMessage = isInvalidValue
     ? "Digite um número válido."
     : isBelowMin
-      ? `Valor mínimo: ${formatInputNumber(min!)}.`
+      ? `Valor mínimo: ${formatNumberForDisplay(min!, formatType, resolvedDecimalDigits)}.`
       : isAboveMax
-        ? `Valor máximo: ${formatInputNumber(max!)}.`
+        ? `Valor máximo: ${formatNumberForDisplay(max!, formatType, resolvedDecimalDigits)}.`
         : null;
 
   return (
@@ -115,14 +126,14 @@ const SimpleNumberField = ({
         <TooltipInfo content={tooltip} />
       </div>
       <Input
-        type="number"
+        type="text"
+        inputMode={formatType === "decimal" ? "decimal" : "numeric"}
         value={draftValue}
-        min={min}
-        max={max}
-        step={step}
+        data-step={step}
         onChange={(event) => setDraftValue(event.target.value)}
         onBlur={commitValue}
         onFocus={(event) => {
+          setDraftValue(String(value));
           if (replaceValueOnFocus) {
             event.currentTarget.select();
           }
@@ -588,6 +599,8 @@ const Index = () => {
               value={inputs.turnoverValue}
               min={0}
               max={inputs.turnoverInputMode === "percentual" ? 100 : 200}
+              formatType={inputs.turnoverInputMode === "percentual" ? "decimal" : "integer"}
+              decimalDigits={inputs.turnoverInputMode === "percentual" ? 1 : 0}
               onChange={(value) => patch("turnoverValue", value)}
               replaceValueOnFocus
             />
