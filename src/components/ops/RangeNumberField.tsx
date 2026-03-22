@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { TooltipInfo } from "./TooltipInfo";
 import { cn } from "@/lib/utils";
+import {
+  formatNumberForDisplay,
+  inferDecimalDigitsFromStep,
+  isTransientNumericInput,
+  NumberFieldFormat,
+  parseLooseNumber,
+} from "@/features/ops-planning/number-input";
 
 interface RangeNumberFieldProps {
   label: string;
@@ -11,6 +18,8 @@ interface RangeNumberFieldProps {
   min: number;
   max: number;
   step?: number;
+  formatType?: NumberFieldFormat;
+  decimalDigits?: number;
   suffix?: string;
   tooltip: string;
 }
@@ -23,49 +32,57 @@ export const RangeNumberField = ({
   min,
   max,
   step = 1,
+  formatType,
+  decimalDigits,
   suffix,
   tooltip,
 }: RangeNumberFieldProps) => {
-  const [draftValue, setDraftValue] = useState(String(value));
+  const resolvedFormatType = formatType ?? (Number.isInteger(step) ? "integer" : "decimal");
+  const resolvedDecimalDigits =
+    decimalDigits ?? (resolvedFormatType === "decimal" ? inferDecimalDigitsFromStep(step, 2) : 0);
+  const [draftValue, setDraftValue] = useState(
+    formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits),
+  );
 
   useEffect(() => {
-    setDraftValue(String(value));
-  }, [value]);
+    setDraftValue(formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits));
+  }, [value, resolvedFormatType, resolvedDecimalDigits]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim();
 
-    if (normalized === "" || normalized === "-" || normalized === "." || normalized === "-.") {
+    if (isTransientNumericInput(normalized)) {
       onChange(min);
-      setDraftValue(String(min));
+      setDraftValue(formatNumberForDisplay(min, resolvedFormatType, resolvedDecimalDigits));
       return;
     }
 
-    const parsed = Number(normalized);
+    const parsed = parseLooseNumber(normalized);
     if (!Number.isFinite(parsed)) {
-      setDraftValue(String(value));
+      setDraftValue(formatNumberForDisplay(value, resolvedFormatType, resolvedDecimalDigits));
       return;
     }
 
     const next = Math.min(Math.max(parsed, min), max);
     onChange(next);
-    setDraftValue(String(next));
+    setDraftValue(formatNumberForDisplay(next, resolvedFormatType, resolvedDecimalDigits));
   };
 
   const normalizedDraft = draftValue.trim();
-  const parsedDraft = Number(normalizedDraft);
   const hasDraft = normalizedDraft.length > 0;
-  const isDraftNumeric = hasDraft && Number.isFinite(parsedDraft);
+  const isTransient = isTransientNumericInput(normalizedDraft);
+  const parsedDraft = !isTransient ? parseLooseNumber(normalizedDraft) : null;
+  const isDraftNumeric = hasDraft && !isTransient && Number.isFinite(parsedDraft);
   const isBelowMin = isDraftNumeric && parsedDraft < min;
   const isAboveMax = isDraftNumeric && parsedDraft > max;
-  const isInvalidValue = hasDraft && !isDraftNumeric;
+  const isInvalidValue = hasDraft && !isTransient && !isDraftNumeric;
 
   const validationMessage = isInvalidValue
     ? "Digite um número válido."
     : isBelowMin
-      ? `Valor mínimo: ${min}.`
+      ? `Valor mínimo: ${formatNumberForDisplay(min, resolvedFormatType, resolvedDecimalDigits)}.`
       : isAboveMax
-        ? `Valor máximo: ${max}.`
+        ? `Valor máximo: ${formatNumberForDisplay(max, resolvedFormatType, resolvedDecimalDigits)}.`
         : null;
 
   return (
@@ -85,17 +102,17 @@ export const RangeNumberField = ({
           onChange={(event) => {
             const next = Number(event.target.value);
             onChange(next);
-            setDraftValue(String(next));
+             setDraftValue(formatNumberForDisplay(next, resolvedFormatType, resolvedDecimalDigits));
           }}
           className="w-full accent-primary"
         />
         <Input
-          type="number"
+           type="text"
+           inputMode={resolvedFormatType === "decimal" ? "decimal" : "numeric"}
           value={draftValue}
-          min={min}
-          max={max}
-          step={step}
+           data-step={step}
           onFocus={(event) => event.currentTarget.select()}
+           onFocusCapture={() => setDraftValue(String(value))}
           onChange={(event) => setDraftValue(event.target.value)}
           onBlur={commitNumberInput}
           onKeyDown={(event) => {
