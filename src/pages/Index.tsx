@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -59,29 +59,66 @@ const SimpleNumberField = ({
   max?: number;
   step?: number;
   replaceValueOnFocus?: boolean;
-}) => (
-  <div className="space-y-2">
-    <div className="flex items-center justify-between gap-2">
-      <label className="text-xs font-medium">{label}</label>
-      <TooltipInfo content={tooltip} />
+}) => {
+  const [draftValue, setDraftValue] = useState(String(value));
+
+  useEffect(() => {
+    setDraftValue(String(value));
+  }, [value]);
+
+  const commitValue = () => {
+    const normalized = draftValue.trim();
+
+    if (normalized === "" || normalized === "-" || normalized === "." || normalized === "-.") {
+      const fallback = min ?? 0;
+      onChange(fallback);
+      setDraftValue(String(fallback));
+      return;
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) {
+      setDraftValue(String(value));
+      return;
+    }
+
+    const boundedMin = min ?? Number.NEGATIVE_INFINITY;
+    const boundedMax = max ?? Number.POSITIVE_INFINITY;
+    const next = Math.min(Math.max(parsed, boundedMin), boundedMax);
+    onChange(next);
+    setDraftValue(String(next));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs font-medium">{label}</label>
+        <TooltipInfo content={tooltip} />
+      </div>
+      <Input
+        type="number"
+        value={draftValue}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(event) => setDraftValue(event.target.value)}
+        onBlur={commitValue}
+        onFocus={(event) => {
+          if (replaceValueOnFocus) {
+            event.currentTarget.select();
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
+        className="mono-numbers h-8"
+      />
+      <p className="text-[11px] text-muted-foreground">{description}</p>
     </div>
-    <Input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(event) => onChange(Number(event.target.value))}
-      onFocus={(event) => {
-        if (replaceValueOnFocus) {
-          event.currentTarget.select();
-        }
-      }}
-      className="mono-numbers h-8"
-    />
-    <p className="text-[11px] text-muted-foreground">{description}</p>
-  </div>
-);
+  );
+};
 
 const Index = () => {
   const [scenario, setScenario] = useState<ScenarioKey>("base");
@@ -180,7 +217,7 @@ const Index = () => {
               tooltip="Base de clientes atual usada para projetar o período"
               value={inputs.currentClients}
               min={1}
-              onChange={(value) => patch("currentClients", Math.max(1, value))}
+              onChange={(value) => patch("currentClients", value)}
             />
             <SimpleNumberField
               label="Meta de clientes até Q4"
@@ -188,7 +225,7 @@ const Index = () => {
               tooltip="Meta de base para o mês final analisado"
               value={inputs.targetClientsQ4}
               min={1}
-              onChange={(value) => patch("targetClientsQ4", Math.max(1, value))}
+              onChange={(value) => patch("targetClientsQ4", value)}
             />
             <SimpleNumberField
               label="Volume atual"
@@ -196,7 +233,7 @@ const Index = () => {
               tooltip="Volume observado no cenário atual"
               value={inputs.currentVolume}
               min={0}
-              onChange={(value) => patch("currentVolume", Math.max(0, value))}
+              onChange={(value) => patch("currentVolume", value)}
             />
             <RangeNumberField
               label="Contact rate (C.R.)"
@@ -337,7 +374,7 @@ const Index = () => {
               tooltip="HC inicial para simulação mensal"
               value={inputs.headcountCurrent}
               min={1}
-              onChange={(value) => patch("headcountCurrent", Math.max(1, value))}
+              onChange={(value) => patch("headcountCurrent", value)}
             />
             <SimpleNumberField
               label="Produtividade base por agente"
@@ -345,7 +382,7 @@ const Index = () => {
               tooltip="Base para cálculo de capacidade efetiva"
               value={inputs.productivityBase}
               min={100}
-              onChange={(value) => patch("productivityBase", Math.max(100, value))}
+              onChange={(value) => patch("productivityBase", value)}
             />
             <SimpleNumberField
               label="Ramp-up (meses)"
@@ -354,7 +391,7 @@ const Index = () => {
               value={inputs.rampUpMonths}
               min={1}
               max={6}
-              onChange={(value) => patch("rampUpMonths", clamp(value, 1, 6))}
+              onChange={(value) => patch("rampUpMonths", value)}
             />
             <div className="grid grid-cols-2 gap-2">
               <SimpleNumberField
@@ -363,7 +400,7 @@ const Index = () => {
                 tooltip="Afeta fator de complexidade"
                 value={inputs.tmaN1}
                 min={5}
-                onChange={(value) => patch("tmaN1", Math.max(5, value))}
+                onChange={(value) => patch("tmaN1", value)}
               />
               <SimpleNumberField
                 label="TMA N2"
@@ -371,7 +408,7 @@ const Index = () => {
                 tooltip="Afeta fator de complexidade"
                 value={inputs.tmaN2}
                 min={5}
-                onChange={(value) => patch("tmaN2", Math.max(5, value))}
+                onChange={(value) => patch("tmaN2", value)}
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -527,7 +564,7 @@ const Index = () => {
               value={inputs.turnoverValue}
               min={0}
               max={inputs.turnoverInputMode === "percentual" ? 100 : 200}
-              onChange={(value) => patch("turnoverValue", clamp(value, 0, inputs.turnoverInputMode === "percentual" ? 100 : 200))}
+              onChange={(value) => patch("turnoverValue", value)}
               replaceValueOnFocus
             />
             <div className="space-y-2">
@@ -557,7 +594,7 @@ const Index = () => {
               value={inputs.leadTimeMonths}
               min={0}
               max={6}
-              onChange={(value) => patch("leadTimeMonths", clamp(value, 0, 6))}
+              onChange={(value) => patch("leadTimeMonths", value)}
             />
             <div className="space-y-2">
               <p className="text-xs font-medium">Modo de contratação</p>

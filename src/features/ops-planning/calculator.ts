@@ -180,13 +180,14 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
   const complexityFactor = clamp(baseWeightedTma / Math.max(1, weightedTma), 0.7, 1.4);
 
   const adjustedVacationPct = (inputs.vacationPct / 100) * (inputs.vacationEligiblePct / 100);
-  const capacityPerAgent =
+  const capacityPerAgentRaw =
     inputs.productivityBase *
     complexityFactor *
     (1 - inputs.breaksPct / 100) *
     (1 - inputs.offchatPct / 100) *
     (1 - inputs.meetingsPct / 100) *
     (1 - adjustedVacationPct);
+  const capacityPerAgent = Math.max(0, capacityPerAgentRaw);
 
   let previousClients = inputs.currentClients;
   let legacyNominal = inputs.headcountCurrent;
