@@ -33,6 +33,9 @@ import { EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "@/features/ops-planning/
 import { PlannerInputs, ScenarioKey } from "@/features/ops-planning/types";
 import { cn } from "@/lib/utils";
 
+const formatInputNumber = (value: number) =>
+  Number.isInteger(value) ? String(value) : value.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
+
 const cloneInputs = (source: PlannerInputs): PlannerInputs => ({
   ...source,
   manualGrowthByMonth: { ...source.manualGrowthByMonth },
@@ -89,6 +92,22 @@ const SimpleNumberField = ({
     setDraftValue(String(next));
   };
 
+  const normalizedDraft = draftValue.trim();
+  const parsedDraft = Number(normalizedDraft);
+  const hasDraft = normalizedDraft.length > 0;
+  const isDraftNumeric = hasDraft && Number.isFinite(parsedDraft);
+  const isBelowMin = isDraftNumeric && min !== undefined && parsedDraft < min;
+  const isAboveMax = isDraftNumeric && max !== undefined && parsedDraft > max;
+  const isInvalidValue = hasDraft && !isDraftNumeric;
+
+  const validationMessage = isInvalidValue
+    ? "Digite um número válido."
+    : isBelowMin
+      ? `Valor mínimo: ${formatInputNumber(min!)}.`
+      : isAboveMax
+        ? `Valor máximo: ${formatInputNumber(max!)}.`
+        : null;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -113,9 +132,14 @@ const SimpleNumberField = ({
             event.currentTarget.blur();
           }
         }}
-        className="mono-numbers h-8"
+        aria-invalid={Boolean(validationMessage)}
+        className={cn(
+          "mono-numbers h-8",
+          validationMessage && "border-destructive focus-visible:ring-destructive",
+        )}
       />
       <p className="text-[11px] text-muted-foreground">{description}</p>
+      {validationMessage ? <p className="text-[11px] text-destructive">{validationMessage}</p> : null}
     </div>
   );
 };
