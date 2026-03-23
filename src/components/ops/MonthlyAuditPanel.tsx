@@ -26,12 +26,15 @@ export const MonthlyAuditPanel = ({ rows, contactRateSource, resolvedContactRate
               <TableHead className="whitespace-nowrap">Mês</TableHead>
               <TableHead className="whitespace-nowrap">agentsNeededRaw</TableHead>
               <TableHead className="whitespace-nowrap">gapFte</TableHead>
-              <TableHead className="whitespace-nowrap">HC nominal início</TableHead>
-              <TableHead className="whitespace-nowrap">HC efetivo</TableHead>
-              <TableHead className="whitespace-nowrap">Contratações abertas</TableHead>
-              <TableHead className="whitespace-nowrap">Contratações iniciadas</TableHead>
-              <TableHead className="whitespace-nowrap">Turnover calculado</TableHead>
-              <TableHead className="whitespace-nowrap">Origem do C.R.</TableHead>
+              <TableHead className="whitespace-nowrap bg-muted/30">HC iníc.</TableHead>
+              <TableHead className="whitespace-nowrap bg-red-500/10 text-red-600">Turnover (início)</TableHead>
+              <TableHead className="whitespace-nowrap bg-muted/30">HC após perda</TableHead>
+              <TableHead className="whitespace-nowrap bg-blue-500/10 text-blue-600">HC Efetivo base</TableHead>
+              <TableHead className="whitespace-nowrap bg-green-500/10 text-green-700">Capac. Disponível</TableHead>
+              <TableHead className="whitespace-nowrap">Contrat. iniciadas</TableHead>
+              <TableHead className="whitespace-nowrap bg-red-500/10 text-red-600">Turnover (fim)</TableHead>
+              <TableHead className="whitespace-nowrap bg-muted/30">HC final</TableHead>
+              <TableHead className="whitespace-nowrap">Detalhe turnover</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -40,15 +43,22 @@ export const MonthlyAuditPanel = ({ rows, contactRateSource, resolvedContactRate
                 <TableCell className="whitespace-nowrap font-medium">{row.month.label}</TableCell>
                 <TableCell className="mono-numbers">{formatDecimal(row.agentsNeededRaw, 2)}</TableCell>
                 <TableCell className="mono-numbers">{formatDecimal(row.gapFte, 2)}</TableCell>
-                <TableCell className="mono-numbers">{formatDecimal(row.hcNominalStart, 0)}</TableCell>
-                <TableCell className="mono-numbers">{formatDecimal(row.hcAvailableEffective, 2)}</TableCell>
-                <TableCell className="mono-numbers">{row.hiresOpened}</TableCell>
+                
+                <TableCell className="mono-numbers bg-muted/30">{formatDecimal(row.hcNominalStart, 0)}</TableCell>
+                <TableCell className="mono-numbers bg-red-500/10 text-red-600">{row.turnoverAppliedStart > 0 ? `-${formatDecimal(row.turnoverAppliedStart, 2)}` : "-"}</TableCell>
+                <TableCell className="mono-numbers bg-muted/30">{formatDecimal(row.hcNominalAfterTurnoverStart, 0)}</TableCell>
+                
+                <TableCell className="mono-numbers bg-blue-500/10 text-blue-600">{formatDecimal(row.hcEffectiveBeforeHires, 2)}</TableCell>
+                <TableCell className="mono-numbers bg-green-500/10 text-green-700">{formatDecimal(row.hcAvailableEffective, 2)}</TableCell>
+                
                 <TableCell className="mono-numbers">{row.hiresStarted}</TableCell>
+                
+                <TableCell className="mono-numbers bg-red-500/10 text-red-600">{row.turnoverAppliedEnd > 0 ? `-${formatDecimal(row.turnoverAppliedEnd, 2)}` : "-"}</TableCell>
+                <TableCell className="mono-numbers font-medium bg-muted/30">{formatDecimal(row.hcFinal, 0)}</TableCell>
+                
                 <TableCell>
-                  <p className="mono-numbers">{formatDecimal(row.turnover, 2)}</p>
                   <p className="text-[10px] text-muted-foreground">{row.turnoverFormula}</p>
                 </TableCell>
-                <TableCell className="capitalize">{contactRateSource}</TableCell>
               </TableRow>
             ))}
           </TableBody>

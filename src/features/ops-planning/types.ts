@@ -69,13 +69,22 @@ export interface MonthlyProjection {
   capacityAvailableTotal: number;
   agentsNeededRaw: number;
   agentsNeeded: number;
+  
   hcNominalStart: number;
+  turnoverAppliedStart: number;
+  hcNominalAfterTurnoverStart: number;
+  
+  hcEffectiveBeforeHires: number;
   hcAvailableEffective: number;
+  
   hcInitial: number;
   turnover: number;
   turnoverFormula: string;
   turnoverTiming: TurnoverTiming;
+  
+  turnoverAppliedEnd: number;
   hcFinal: number;
+  
   gapFte: number;
   gap: number;
   hiresOpened: number;

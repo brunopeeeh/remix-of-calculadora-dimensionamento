@@ -83,8 +83,59 @@ describe("lead time impact on projection", () => {
     const month0Hires = proj.rows[0].hire;
     if (month0Hires > 0) {
       // In month 1, those hires haven't started yet
-      // The effective HC should only reflect legacy + cohorts that already started
-      expect(proj.rows[0].hiresOpened).toBeGreaterThan(0);
+      expect(proj.rows[0].hiresStarted).toBe(0);
+      expect(proj.rows[1].hiresStarted).toBe(0);
+      expect(proj.rows[2].hiresStarted).toBeGreaterThanOrEqual(month0Hires);
+    }
+  });
+
+  it("leadTime = 0, 1 e 2 geram resultados numericos reais", () => {
+    const config = minimal({ headcountCurrent: 10, startMonth: 1, endMonth: 12, targetClientsQ4: 5000 });
+    const p0 = runPlannerProjection({ ...config, leadTimeMonths: 0 });
+    const p1 = runPlannerProjection({ ...config, leadTimeMonths: 1 });
+    const p2 = runPlannerProjection({ ...config, leadTimeMonths: 2 });
+
+    const hc0 = p0.rows.slice(0, 3).map(r => r.hcNominalStart).reduce((a, b) => a + b, 0);
+    const hc1 = p1.rows.slice(0, 3).map(r => r.hcNominalStart).reduce((a, b) => a + b, 0);
+    const hc2 = p2.rows.slice(0, 3).map(r => r.hcNominalStart).reduce((a, b) => a + b, 0);
+
+    expect(hc0).toBeGreaterThanOrEqual(hc1);
+    expect(hc1).toBeGreaterThanOrEqual(hc2);
+  });
+});
+
+// ── Produtividade das coortes (antes, parcial e cheia) ──
+
+describe("verificacao unitária de capacidade nas coortes", () => {
+  it("deve refletir capacidade 0 (ainda não começou), parcial (em ramp) e total (maturado)", () => {
+    const proj = runPlannerProjection(minimal({
+      hiringMode: "gap",
+      currentClients: 1000,
+      targetClientsQ4: 3000,
+      headcountCurrent: 10,
+      startMonth: 1, endMonth: 6,
+      leadTimeMonths: 2,
+      rampUpMonths: 3
+    }));
+
+    const openIndex = proj.rows.findIndex(r => r.hiresOpened > 0);
+    expect(openIndex).toBeGreaterThan(-1);
+
+    const startIndex = openIndex + 2;
+    
+    // Mês onde a vaga inicia (rampUp = 3, fator < 1)
+    const monthStart = proj.rows[startIndex];
+    const contributionStart = monthStart.cohortContributions.find(c => c.monthIndex === openIndex);
+    expect(contributionStart).toBeDefined();
+    expect(contributionStart?.rampFactor).toBeCloseTo(1/3);
+    expect(contributionStart?.effective).toBeLessThan(contributionStart?.nominal || 1);
+
+    // Mês onde a vaga atinge produtividade cheia
+    const monthMature = proj.rows[startIndex + 2];
+    if (monthMature) {
+      const contributionMature = monthMature.cohortContributions.find(c => c.monthIndex === openIndex);
+      expect(contributionMature?.rampFactor).toBe(1);
+      expect(contributionMature?.effective).toBeCloseTo(contributionMature?.nominal || 0);
     }
   });
 });
@@ -118,6 +169,29 @@ describe("hiringMode gap vs antecipado", () => {
       const rowIndex = proj.rows.indexOf(riskRow);
       expect(riskRow.openMonthIndex).toBe(rowIndex - expectedOffset);
     }
+  });
+
+  it("hiringMode 'gap' e 'antecipado' impactam a disponibilidade efetiva de forma diferente", () => {
+    // Cenário idêntico, único delta é o hiringMode
+    const config = minimal({
+      currentClients: 1000,
+      targetClientsQ4: 2000,
+      headcountCurrent: 10,
+      startMonth: 1,
+      endMonth: 12,
+      rampUpMonths: 3,
+      leadTimeMonths: 1,
+    });
+    const gapProj = runPlannerProjection({ ...config, hiringMode: "gap" });
+    const antProj = runPlannerProjection({ ...config, hiringMode: "antecipado" });
+
+    const firstHireGapMonthIndex = gapProj.rows.findIndex(r => r.hiresStarted > 0);
+    expect(firstHireGapMonthIndex).toBeGreaterThan(-1);
+
+    const gapRow = gapProj.rows[firstHireGapMonthIndex];
+    const antRow = antProj.rows[firstHireGapMonthIndex];
+
+    expect(antRow.hcAvailableEffective).toBeGreaterThan(gapRow.hcAvailableEffective);
   });
 });
 
@@ -166,7 +240,7 @@ describe("turnover crossing year boundary", () => {
       startMonth: 11,
       endMonth: 2,
       headcountCurrent: 10,
-      turnoverValue: 4,
+      turnoverValue: 12, // 12 por ano
       turnoverPeriod: "anual",
       turnoverInputMode: "absoluto",
       turnoverMonths: ["2026-11", "2026-12", "2027-01", "2027-02"],
@@ -174,6 +248,7 @@ describe("turnover crossing year boundary", () => {
     }));
 
     expect(proj.timeline).toHaveLength(4);
+    // 12/ano = 1/mês. Numa simulação de 4 meses marcando todos os 4, teríamos 1 em cada
     expect(proj.rows.map((r) => r.turnover)).toEqual([1, 1, 1, 1]);
   });
 });

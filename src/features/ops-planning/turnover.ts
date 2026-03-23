@@ -26,8 +26,8 @@ const fmt = (v: number) => v.toFixed(2);
 export interface TurnoverContext {
   activeTimelineKeySet: Set<string>;
   activeCount: number;
-  distributionFactor: number;
   periodMonths: number;
+  timelineLength: number;
 }
 
 export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
@@ -39,8 +39,8 @@ export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint
   return {
     activeTimelineKeySet: new Set(unique),
     activeCount: unique.length,
-    distributionFactor: unique.length > 0 ? timeline.length / unique.length : 0,
     periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
+    timelineLength: timeline.length,
   };
 };
 
@@ -50,14 +50,18 @@ export const resolveTurnoverForMonth = (
   monthKey: string,
   hcBase: number,
 ): number => {
-  if (inputs.turnoverValue <= 0 || !ctx.activeTimelineKeySet.has(monthKey)) return 0;
+  if (inputs.turnoverValue <= 0 || !ctx.activeTimelineKeySet.has(monthKey) || ctx.activeCount === 0) return 0;
+
+  const timelineFractionOfPeriod = ctx.timelineLength / ctx.periodMonths;
 
   if (inputs.turnoverInputMode === "percentual") {
-    const monthlyRate = (inputs.turnoverValue / 100) / ctx.periodMonths;
-    return hcBase * monthlyRate * ctx.distributionFactor;
+    const intendedTotalPct = (inputs.turnoverValue / 100) * timelineFractionOfPeriod;
+    const pctPerActiveMonth = intendedTotalPct / ctx.activeCount;
+    return hcBase * pctPerActiveMonth;
   }
 
-  return ctx.activeCount > 0 ? inputs.turnoverValue / ctx.activeCount : 0;
+  const intendedTotalAbs = inputs.turnoverValue * timelineFractionOfPeriod;
+  return intendedTotalAbs / ctx.activeCount;
 };
 
 export const buildTurnoverFormula = (
@@ -74,12 +78,15 @@ export const buildTurnoverFormula = (
 
   const prefix = `${modeLabel} ${periodLabel} (${timingLabel})`;
 
-  if (inputs.turnoverInputMode === "percentual") {
-    return `${prefix} | Base: HC (${fmt(hcBase)}) | (${fmt(inputs.turnoverValue)}% ÷ ${ctx.periodMonths}) × ${fmt(hcBase)} × ${fmt(ctx.distributionFactor)} = ${fmt(turnover)}`;
-  }
-
   if (ctx.activeCount === 0) return `${prefix} | sem meses ativos = 0`;
   if (!isActive) return `${prefix} | mês inativo = 0`;
 
-  return `${prefix} | ${fmt(inputs.turnoverValue)} ÷ ${ctx.activeCount} = ${fmt(turnover)}`;
+  const fractionRatio = `${ctx.timelineLength}/${ctx.periodMonths} da meta no período`;
+
+  if (inputs.turnoverInputMode === "percentual") {
+    return `${prefix} | Base: HC (${fmt(hcBase)}) | (${fmt(inputs.turnoverValue)}% × ${fractionRatio}) ÷ ${ctx.activeCount} ativações = ${fmt(turnover)}`;
+  }
+
+  return `${prefix} | (${fmt(inputs.turnoverValue)} abs × ${fractionRatio}) ÷ ${ctx.activeCount} ativações = ${fmt(turnover)}`;
 };
+
