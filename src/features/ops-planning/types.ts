@@ -3,6 +3,7 @@ export type GrowthMode = "linear" | "manual";
 export type HiringMode = "gap" | "antecipado";
 export type TurnoverPeriod = "mensal" | "semestral" | "anual";
 export type TurnoverInputMode = "absoluto" | "percentual";
+export type TurnoverTiming = "start_of_month" | "end_of_month";
 
 export interface PlannerInputs {
   currentClients: number;
@@ -35,6 +36,7 @@ export interface PlannerInputs {
   turnoverValue: number;
   turnoverPeriod: TurnoverPeriod;
   turnoverInputMode: TurnoverInputMode;
+  turnoverTiming: TurnoverTiming;
   turnoverMonths: string[];
 
   leadTimeMonths: number;
@@ -46,6 +48,13 @@ export interface MonthPoint {
   month: number;
   year: number;
   label: string;
+}
+
+export interface CohortContribution {
+  monthIndex: number;
+  nominal: number;
+  effective: number;
+  rampFactor: number;
 }
 
 export interface MonthlyProjection {
@@ -60,14 +69,19 @@ export interface MonthlyProjection {
   capacityAvailableTotal: number;
   agentsNeededRaw: number;
   agentsNeeded: number;
+  hcNominalStart: number;
   hcAvailableEffective: number;
   hcInitial: number;
   turnover: number;
   turnoverFormula: string;
+  turnoverTiming: TurnoverTiming;
   hcFinal: number;
   gapFte: number;
   gap: number;
+  hiresOpened: number;
+  hiresStarted: number;
   hire: number;
+  cohortContributions: CohortContribution[];
   openIn: string;
   openMonthIndex: number;
   risk: "ok" | "attention" | "critical";

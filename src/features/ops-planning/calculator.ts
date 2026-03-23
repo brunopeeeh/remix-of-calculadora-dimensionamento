@@ -1,144 +1,21 @@
-import { clamp, monthNames } from "./format";
-import { MonthPoint, PlannerInputs, ProjectionResult } from "./types";
+import { MonthPoint, PlannerInputs, ProjectionResult, MonthlyProjection, CohortContribution } from "./types";
+import { buildTimeline, getTimelineKey } from "./timeline";
+import { computeCapacityPerAgent, resolveContactRate } from "./capacity";
+import { getRampFactor, getRampMaturationOffset } from "./ramp";
+import { buildTurnoverContext, resolveTurnoverForMonth, buildTurnoverFormula, TurnoverContext } from "./turnover";
+import { computeDemandForMonth, computeFallbackManualGrowthPct } from "./demand";
 
-const MONTH_LIMIT = 24;
-const BASE_YEAR = 2026;
+export { getTimelineKey } from "./timeline";
+export { getRampFactor } from "./ramp";
+export { resolveContactRate } from "./capacity";
 
-export const getTimelineKey = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
-
-const buildTimeline = (startMonth: number, endMonth: number): MonthPoint[] => {
-  const timeline: MonthPoint[] = [];
-  const start = new Date(BASE_YEAR, startMonth - 1, 1);
-  const endYear = endMonth >= startMonth ? BASE_YEAR : BASE_YEAR + 1;
-  const end = new Date(endYear, endMonth - 1, 1);
-
-  const cursor = new Date(start);
-  while (cursor <= end && timeline.length < MONTH_LIMIT) {
-    const month = cursor.getMonth() + 1;
-    const year = cursor.getFullYear();
-    timeline.push({
-      key: getTimelineKey(year, month),
-      month,
-      year,
-      label: `${monthNames[month - 1]}/${String(year).slice(-2)}`,
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-
-  return timeline;
-};
-
-const getTurnoverPeriodMonths = (period: PlannerInputs["turnoverPeriod"]) => {
-  if (period === "mensal") return 1;
-  if (period === "semestral") return 6;
-  return 12;
-};
-
-interface TurnoverContext {
-  activeTimelineKeySet: Set<string>;
-  activeCount: number;
-  distributionFactor: number;
-  periodMonths: number;
-}
-
-const formatTurnoverPeriod = (period: PlannerInputs["turnoverPeriod"]) => {
-  if (period === "mensal") return "Mensal";
-  if (period === "semestral") return "Semestral";
-  return "Anual";
-};
-
-const formatTurnoverMode = (mode: PlannerInputs["turnoverInputMode"]) => {
-  if (mode === "percentual") return "Percentual";
-  return "Absoluto";
-};
-
-const formatAuditNumber = (value: number) => value.toFixed(2);
-
-const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
-  const activeTimelineKeys = timeline
-    .map((point) => point.key)
-    .filter((key, index, all) => inputs.turnoverMonths.includes(key) && all.indexOf(key) === index);
-
-  return {
-    activeTimelineKeySet: new Set(activeTimelineKeys),
-    activeCount: activeTimelineKeys.length,
-    distributionFactor: activeTimelineKeys.length > 0 ? timeline.length / activeTimelineKeys.length : 0,
-    periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
-  };
-};
-
-const resolveTurnoverForMonth = (
-  inputs: PlannerInputs,
-  turnoverContext: TurnoverContext,
-  monthKey: string,
-  hcAvailableEffective: number,
-) => {
-  if (inputs.turnoverValue <= 0 || !turnoverContext.activeTimelineKeySet.has(monthKey)) {
-    return 0;
-  }
-
-  if (inputs.turnoverInputMode === "percentual") {
-    const monthlyRate = (inputs.turnoverValue / 100) / turnoverContext.periodMonths;
-    return hcAvailableEffective * monthlyRate * turnoverContext.distributionFactor;
-  }
-
-  const monthlyAbsolute = turnoverContext.activeCount > 0 ? inputs.turnoverValue / turnoverContext.activeCount : 0;
-  return monthlyAbsolute;
-};
-
-const buildTurnoverFormula = (
-  inputs: PlannerInputs,
-  turnoverContext: TurnoverContext,
-  monthKey: string,
-  hcAvailableEffective: number,
-  turnover: number,
-) => {
-  const periodLabel = formatTurnoverPeriod(inputs.turnoverPeriod);
-  const modeLabel = formatTurnoverMode(inputs.turnoverInputMode);
-  const isActiveMonth = turnoverContext.activeTimelineKeySet.has(monthKey);
-
-  if (inputs.turnoverInputMode === "percentual") {
-    return `${modeLabel} ${periodLabel} | Base: HC disp. mês (${formatAuditNumber(hcAvailableEffective)}) | Fórmula: (${formatAuditNumber(inputs.turnoverValue)}% ÷ ${turnoverContext.periodMonths}) × ${formatAuditNumber(hcAvailableEffective)} × ${formatAuditNumber(turnoverContext.distributionFactor)} = ${formatAuditNumber(turnover)}`;
-  }
-
-  if (turnoverContext.activeCount === 0) {
-    return `${modeLabel} ${periodLabel} | Base: meses selecionados (0) | Fórmula: sem meses ativos = 0`;
-  }
-
-  if (!isActiveMonth) {
-    return `${modeLabel} ${periodLabel} | Base: meses selecionados (${turnoverContext.activeCount}) | Fórmula: mês inativo = 0`;
-  }
-
-  return `${modeLabel} ${periodLabel} | Base: meses selecionados (${turnoverContext.activeCount}) | Fórmula: ${formatAuditNumber(inputs.turnoverValue)} ÷ ${turnoverContext.activeCount} = ${formatAuditNumber(turnover)}`;
-};
-
-const baseWeightedTma = 20 * 0.8 + 45 * 0.2;
-
-export const getRampFactor = (monthsSinceHire: number, rampUpMonths: number) => {
-  if (monthsSinceHire < 0) return 0;
-  if (rampUpMonths <= 1) return 1;
-  if (monthsSinceHire >= rampUpMonths - 1) return 1;
-  return (monthsSinceHire + 1) / rampUpMonths;
-};
-
-const getRampMaturationOffset = (rampUpMonths: number) => {
-  if (rampUpMonths <= 1) return 0;
-  return rampUpMonths - 1;
-};
-
-export const resolveContactRate = (inputs: PlannerInputs) => {
-  if (inputs.contactRate > 0) return inputs.contactRate;
-  if (inputs.currentClients <= 0) return 0;
-  return inputs.currentVolume / inputs.currentClients;
-};
-
-const fallbackManualGrowthPct = (inputs: PlannerInputs, totalSteps: number) => {
-  if (inputs.currentClients <= 0 || inputs.targetClientsQ4 <= 0) return 0;
-  return (Math.pow(inputs.targetClientsQ4 / inputs.currentClients, 1 / totalSteps) - 1) * 100;
-};
+// ── Cohort tracking ──
 
 interface HireCohort {
-  monthIndex: number;
+  /** Index in the timeline when this cohort was *opened* (vacancy created) */
+  openedAtIndex: number;
+  /** Index in the timeline when these hires actually start working */
+  startIndex: number;
   count: number;
 }
 
@@ -148,147 +25,216 @@ const computeRisk = (gap: number) => {
   return "critical" as const;
 };
 
+// ── Main projection ──
+
 export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult => {
   const timeline = buildTimeline(inputs.startMonth, inputs.endMonth);
-  const rows = [] as ProjectionResult["rows"];
 
   if (timeline.length === 0) {
     return {
       timeline: [],
       rows: [],
       summary: {
-        volumeQ4: 0,
-        volumeHumanQ4: 0,
-        capacityPerAgent: 0,
-        agentsNeededQ4: 0,
-        hiresYear: 0,
-        criticalOpenMonth: "Sem risco",
-        riskMonths: [],
+        volumeQ4: 0, volumeHumanQ4: 0, capacityPerAgent: 0,
+        agentsNeededQ4: 0, hiresYear: 0,
+        criticalOpenMonth: "Sem risco", riskMonths: [],
       },
     };
   }
 
+  const capacityPerAgent = computeCapacityPerAgent(inputs);
+  const contactRate = resolveContactRate(inputs);
   const turnoverContext = buildTurnoverContext(inputs, timeline);
   const totalSteps = Math.max(1, timeline.length - 1);
   const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
-  const fallbackManualGrowth = fallbackManualGrowthPct(inputs, totalSteps);
-  const contactRate = resolveContactRate(inputs);
+  const fallbackGrowth = computeFallbackManualGrowthPct(inputs, totalSteps);
 
-  const mixN1 = inputs.mixN1Pct / 100;
-  const mixN2 = inputs.mixN2Pct / 100;
-  const weightedTma = inputs.tmaN1 * mixN1 + inputs.tmaN2 * mixN2;
-  const complexityFactor = clamp(baseWeightedTma / Math.max(1, weightedTma), 0.7, 1.4);
-
-  const adjustedVacationPct = (inputs.vacationPct / 100) * (inputs.vacationEligiblePct / 100);
-  const capacityPerAgentRaw =
-    inputs.productivityBase *
-    complexityFactor *
-    (1 - inputs.breaksPct / 100) *
-    (1 - inputs.offchatPct / 100) *
-    (1 - inputs.meetingsPct / 100) *
-    (1 - adjustedVacationPct);
-  const capacityPerAgent = Math.max(0, capacityPerAgentRaw);
-
+  const rows: MonthlyProjection[] = [];
   let previousClients = inputs.currentClients;
   let legacyNominal = inputs.headcountCurrent;
-  const hireCohorts: HireCohort[] = [];
+  const cohorts: HireCohort[] = [];
 
-  timeline.forEach((point, index) => {
-    const clientsBase =
-      index === 0
-        ? inputs.currentClients
-        : inputs.growthMode === "linear"
-          ? inputs.currentClients + linearStep * index
-          : previousClients * (1 + (inputs.manualGrowthByMonth[point.key] ?? fallbackManualGrowth) / 100);
+  // Pre-compute: in "antecipado" mode, we do a forward-looking pass
+  // to figure out how many hires to open NOW so they're ramped up LATER.
+  // In "gap" mode, hires are opened with leadTime offset but start immediately after leadTime.
 
-    const volumeGross = clientsBase * contactRate;
-    const aiPct = clamp(inputs.aiCoveragePct + inputs.aiGrowthMonthlyPct * index + inputs.extraAutomationPct, 0, 95);
-    const volumeAI = volumeGross * (aiPct / 100);
-    const volumeHuman = volumeGross - volumeAI;
+  /**
+   * Key insight of the new model:
+   *
+   * - leadTimeMonths: delay between opening a vacancy and the hire starting work.
+   *   A hire opened at month i starts at month i + leadTimeMonths.
+   *
+   * - hiringMode "gap": open the vacancy at month i (when gap is detected).
+   *   The hire starts at i + leadTimeMonths. No ramp-up anticipation.
+   *
+   * - hiringMode "antecipado": open the vacancy earlier so the hire is fully
+   *   ramped at month i. Open at i - leadTimeMonths - (rampUpMonths - 1).
+   *
+   * We use a two-pass approach:
+   *   Pass 1: compute demand for all months
+   *   Pass 2: compute hiring with proper lead time
+   *
+   * For simplicity and backward compat, we do a single forward pass but
+   * track cohorts with their startIndex.
+   */
 
-    const agentsNeededRaw = volumeHuman / Math.max(1, capacityPerAgent);
+  for (let index = 0; index < timeline.length; index++) {
+    const point = timeline[index];
+
+    // ── Demand ──
+    const demand = computeDemandForMonth(
+      inputs, point, index, previousClients, contactRate, linearStep, fallbackGrowth,
+    );
+
+    const agentsNeededRaw = demand.volumeHuman / Math.max(1, capacityPerAgent);
     const agentsNeeded = Math.ceil(agentsNeededRaw);
 
-    const hcInitial = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
-    const hcAvailableFromExisting =
-      legacyNominal +
-      hireCohorts.reduce((acc, cohort) => acc + cohort.count * getRampFactor(index - cohort.monthIndex, inputs.rampUpMonths), 0);
+    // ── HC available (before this month's hires) ──
+    const hcNominalStart = Math.max(0,
+      legacyNominal + cohorts.reduce((acc, c) => acc + c.count, 0),
+    );
 
-    const preHireGapFte = Math.max(0, agentsNeeded - hcAvailableFromExisting);
-    const hire = Math.ceil(preHireGapFte);
-    const hcAvailableEffective = hcAvailableFromExisting + hire * getRampFactor(0, inputs.rampUpMonths);
-    const capacityAvailableTotal = hcAvailableEffective * capacityPerAgent;
+    // Effective HC: legacy + each cohort's ramped contribution
+    const cohortContributions: CohortContribution[] = [];
+    let hcEffectiveFromExisting = legacyNominal;
 
-    const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
-    const gap = Math.ceil(gapFte);
-    const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, hcAvailableEffective);
-    const turnoverFormula = buildTurnoverFormula(inputs, turnoverContext, point.key, hcAvailableEffective, turnover);
-
-    if (hire > 0) {
-      hireCohorts.push({ monthIndex: index, count: hire });
+    for (const cohort of cohorts) {
+      const monthsSinceStart = index - cohort.startIndex;
+      const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
+      const effective = cohort.count * rampFactor;
+      hcEffectiveFromExisting += effective;
+      cohortContributions.push({
+        monthIndex: cohort.openedAtIndex,
+        nominal: cohort.count,
+        effective,
+        rampFactor,
+      });
     }
 
-    let remainingTurnover = Math.min(turnover, hcInitial + hire);
+    // ── Turnover ──
+    // Apply turnover based on timing configuration
+    let hcAfterTurnover = hcEffectiveFromExisting;
+    const turnoverBase = inputs.turnoverTiming === "start_of_month"
+      ? hcEffectiveFromExisting
+      : hcEffectiveFromExisting; // base is always current HC
+    const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, turnoverBase);
+
+    if (inputs.turnoverTiming === "start_of_month" && turnover > 0) {
+      hcAfterTurnover = Math.max(0, hcEffectiveFromExisting - turnover);
+    }
+
+    // ── Gap & hiring ──
+    const hcBeforeHire = inputs.turnoverTiming === "start_of_month" ? hcAfterTurnover : hcEffectiveFromExisting;
+    const preHireGapFte = Math.max(0, agentsNeeded - hcBeforeHire);
+    const hire = Math.ceil(preHireGapFte);
+
+    // Determine when this hire actually starts working
+    const hireStartIndex = index + inputs.leadTimeMonths;
+
+    if (hire > 0) {
+      cohorts.push({
+        openedAtIndex: index,
+        startIndex: hireStartIndex,
+        count: hire,
+      });
+    }
+
+    // For "antecipado" mode, check if there are future needs we should hire for now
+    let hiresOpened = hire;
+    let hiresStarted = 0;
+
+    // Count hires that started this month (from previous openings)
+    for (const cohort of cohorts) {
+      if (cohort.startIndex === index) {
+        hiresStarted += cohort.count;
+      }
+    }
+
+    // Recalculate effective HC including new hires that start THIS month
+    let hcAvailableEffective = hcBeforeHire;
+    for (const cohort of cohorts) {
+      if (cohort.startIndex === index) {
+        // New hire starting this month with ramp factor
+        hcAvailableEffective += cohort.count * getRampFactor(0, inputs.rampUpMonths);
+      }
+    }
+
+    // For end-of-month turnover, apply after hiring
+    if (inputs.turnoverTiming === "end_of_month" && turnover > 0) {
+      hcAfterTurnover = Math.max(0, hcAvailableEffective - turnover);
+    }
+
+    const capacityAvailableTotal = hcAvailableEffective * capacityPerAgent;
+    const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
+    const gap = Math.ceil(gapFte);
+
+    const turnoverFormula = buildTurnoverFormula(
+      inputs, turnoverContext, point.key, turnoverBase, turnover,
+    );
+
+    // ── Apply turnover to nominal counts ──
+    let remainingTurnover = Math.min(turnover, hcNominalStart + hire);
     const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
     legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
     remainingTurnover -= legacyTurnover;
 
-    for (let cohortIdx = 0; cohortIdx < hireCohorts.length && remainingTurnover > 0; cohortIdx += 1) {
-      const cohort = hireCohorts[cohortIdx];
-      const cohortTurnover = Math.min(cohort.count, remainingTurnover);
-      cohort.count -= cohortTurnover;
-      remainingTurnover -= cohortTurnover;
+    for (let ci = 0; ci < cohorts.length && remainingTurnover > 0; ci++) {
+      const c = cohorts[ci];
+      const ct = Math.min(c.count, remainingTurnover);
+      c.count -= ct;
+      remainingTurnover -= ct;
     }
 
-    for (let cohortIdx = hireCohorts.length - 1; cohortIdx >= 0; cohortIdx -= 1) {
-      if (hireCohorts[cohortIdx].count <= 0) {
-        hireCohorts.splice(cohortIdx, 1);
-      }
+    // Clean up empty cohorts
+    for (let ci = cohorts.length - 1; ci >= 0; ci--) {
+      if (cohorts[ci].count <= 0) cohorts.splice(ci, 1);
     }
 
-    const hcFinal = Math.max(0, legacyNominal + hireCohorts.reduce((acc, cohort) => acc + cohort.count, 0));
+    const hcFinal = Math.max(0,
+      legacyNominal + cohorts.reduce((acc, c) => acc + c.count, 0),
+    );
 
-    const openOffset =
-      inputs.leadTimeMonths +
-      (inputs.hiringMode === "antecipado" ? getRampMaturationOffset(inputs.rampUpMonths) : 0);
+    // ── Open vacancy timing ──
+    const rampOffset = inputs.hiringMode === "antecipado" ? getRampMaturationOffset(inputs.rampUpMonths) : 0;
+    const openOffset = inputs.leadTimeMonths + rampOffset;
     const openMonthIndex = index - openOffset;
 
     const risk = computeRisk(gap);
 
     rows.push({
       month: point,
-      clientsBase,
-      contactRate,
-      volumeGross,
-      aiPct,
-      volumeAI,
-      volumeHuman,
+      ...demand,
       capacityPerAgent,
       capacityAvailableTotal,
       agentsNeededRaw,
       agentsNeeded,
+      hcNominalStart,
       hcAvailableEffective,
-      hcInitial,
+      hcInitial: hcNominalStart,
       turnover,
       turnoverFormula,
+      turnoverTiming: inputs.turnoverTiming,
       hcFinal,
       gapFte,
       gap,
       hire,
-      openIn: openMonthIndex >= 0 ? timeline[openMonthIndex].label : "Antes do período",
+      hiresOpened: hiresOpened,
+      hiresStarted,
+      cohortContributions,
+      openIn: openMonthIndex >= 0 && openMonthIndex < timeline.length
+        ? timeline[openMonthIndex].label
+        : "Antes do período",
       openMonthIndex,
       risk,
     });
 
-    previousClients = clientsBase;
-  });
+    previousClients = demand.clientsBase;
+  }
 
   const last = rows[rows.length - 1];
-  const hiresYear = rows.reduce((acc, row) => acc + row.hire, 0);
-  const riskMonths = rows.filter((row) => row.gap > 0).map((row) => row.month.label);
-  const criticalOpenMonth =
-    rows.find((row) => row.gap > 0)?.openIn ??
-    "Sem risco";
+  const hiresYear = rows.reduce((acc, r) => acc + r.hire, 0);
+  const riskMonths = rows.filter((r) => r.gap > 0).map((r) => r.month.label);
+  const criticalOpenMonth = rows.find((r) => r.gap > 0)?.openIn ?? "Sem risco";
 
   return {
     timeline,

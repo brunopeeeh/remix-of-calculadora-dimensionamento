@@ -19,25 +19,12 @@ export const MonthlyTable = ({ rows }: MonthlyTableProps) => {
           <thead className="sticky top-0 z-10 bg-card">
             <tr className="border-b text-muted-foreground">
               {[
-                "Mês",
-                "Base de clientes",
-                "C.R.",
-                "Volume bruto",
-                "% IA",
-                "Volume IA",
-                "Volume humano",
-                "Capacidade efetiva/agente",
-                "Agentes necessários",
-                "HC efetivo",
-                "Turnover",
-                "HC final",
-                "Gap",
-                "Contratar",
-                "Abrir vaga em",
+                "Mês", "Base de clientes", "C.R.", "Volume bruto", "% IA",
+                "Volume IA", "Volume humano", "Cap. efetiva/agente",
+                "Agentes necessários", "HC nominal", "HC efetivo", "Turnover",
+                "HC final", "Gap", "Contratar", "Abrir vaga em",
               ].map((column) => (
-                <th key={column} className="whitespace-nowrap px-3 py-2 text-left font-medium">
-                  {column}
-                </th>
+                <th key={column} className="whitespace-nowrap px-3 py-2 text-left font-medium">{column}</th>
               ))}
             </tr>
           </thead>
@@ -53,19 +40,12 @@ export const MonthlyTable = ({ rows }: MonthlyTableProps) => {
                 <td className="mono-numbers px-3 py-2">{formatInt(row.volumeHuman)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.capacityPerAgent)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.agentsNeeded)}</td>
+                <td className="mono-numbers px-3 py-2">{formatInt(row.hcNominalStart)}</td>
                 <td className="mono-numbers px-3 py-2">{formatDecimal(row.hcAvailableEffective, 2)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.turnover)}</td>
                 <td className="mono-numbers px-3 py-2">{formatInt(row.hcFinal)}</td>
                 <td className="mono-numbers px-3 py-2">
-                  <span
-                    className={
-                      row.gap === 0
-                        ? "text-success"
-                        : row.gap <= 1
-                          ? "text-warning"
-                          : "text-danger"
-                    }
-                  >
+                  <span className={row.gap === 0 ? "text-success" : row.gap <= 1 ? "text-warning" : "text-danger"}>
                     {formatInt(row.gap)}
                   </span>
                 </td>
