@@ -1,53 +1,20 @@
 
-Objetivo: elevar a precisão do motor de dimensionamento com foco em consistência matemática, previsibilidade e cobertura de testes.
+# Plano de evolução — Calculadora de Dimensionamento
 
-1) Corrigir inconsistências de regra no domínio
-- Tornar a rampa parametrizável via `rampUpMonths` (hoje está hardcoded em 33/66/100 + offset fixo de 2).
-- Definir uma função única de rampa (ex.: `buildRampCurve(rampUpMonths)`) usada tanto no cálculo de `hcAvailableEffective` quanto no `openMonthIndex`.
-- Resultado esperado: o valor de “Ramp-up (meses)” passa a impactar de fato o modelo.
+## ✅ Concluído (refatoração v2)
 
-2) Eliminar ambiguidades temporais (mês/ano)
-- Trocar chaves de mês simples (`point.month`) por chave temporal completa (`YYYY-MM`) em:
-  - `manualGrowthByMonth`
-  - distribuição de turnover
-- Ajustar leitura/escrita da sidebar para esse novo formato.
-- Resultado esperado: simulações com janela >12 meses não terão colisão entre meses de anos diferentes.
+1. Motor de projeção reescrito com lead time real, hiring modes (gap/antecipado), cohort tracking explícito
+2. Turnover com timing configurável (start_of_month / end_of_month) e fórmula auditável
+3. Index.tsx refatorado: de 816 → ~65 linhas (composição pura)
+4. Hooks extraídos: usePlannerState, usePlannerProjection
+5. Motor dividido: calculator, capacity, demand, ramp, timeline, turnover
+6. 28 testes unitários cobrindo regras críticas
+7. README, package.json e playwright.config atualizados
 
-3) Reforçar consistência de fórmulas de demanda
-- Implementar regra explícita para `currentVolume`:
-  - opção A: derivar `contactRate = currentVolume/currentClients` automaticamente,
-  - opção B: manter manual e exibir alerta de inconsistência quando divergir muito.
-- Garantir comportamento determinístico quando `growthMode = manual` e faltarem meses no mapa de crescimento (fallback documentado).
-- Resultado esperado: menos discrepância entre premissas exibidas e projeção final.
+## Próximos passos opcionais
 
-4) Revisar cálculo de gap para precisão operacional
-- Separar no motor:
-  - `agentsNeededRaw` (decimal)
-  - `agentsNeeded` (ceil para decisão)
-  - `gapFte` (contra HC efetivo)
-  - `gap` (ceil para exibição/ação)
-- Padronizar arredondamentos em um único ponto para evitar efeito cascata.
-- Resultado esperado: números da tabela, KPIs e timeline coerentes entre si.
-
-5) Expandir testes do motor (prioridade alta)
-- Adicionar cenários unitários para:
-  - rampa parametrizada (2, 3, 4 meses),
-  - modo `antecipado` vs `gap` com mesma entrada,
-  - período cruzando ano,
-  - distribuição de turnover em meses repetidos no calendário,
-  - consistência `currentVolume` x `contactRate`.
-- Incluir testes de regressão com snapshots de `summary` e 2-3 meses críticos.
-- Resultado esperado: detectar regressões de precisão antes de qualquer ajuste visual.
-
-6) Pequenos ajustes de transparência na UI (sem mudar layout)
-- Atualizar microcopy de fórmula para refletir regras finais (rampa e derivação de C.R.).
-- Exibir tooltip técnico curto com “como o número foi calculado” em KPIs sensíveis (`agentsNeededQ4`, `criticalOpenMonth`).
-- Resultado esperado: confiança maior no número apresentado sem poluir a interface.
-
-Detalhes técnicos (resumo)
-- Criar utilitários no motor:
-  - `getTimelineKey(point) => "YYYY-MM"`
-  - `getRampFactor(monthsSinceHire, rampUpMonths)`
-  - `resolveContactRate(inputs)`
-- Manter `runPlannerProjection` como orquestrador e mover regras puras para funções testáveis.
-- Critério de aceite: para mesmo input, projeção é estável, auditável e sem divergência entre tabela/KPIs/timeline.
+- Persistência de inputs via localStorage
+- Exportação CSV/PDF da projeção
+- Forward-looking hiring (antecipar contratações com base em demanda futura)
+- Testes E2E com Playwright
+- Code-splitting para reduzir bundle size
