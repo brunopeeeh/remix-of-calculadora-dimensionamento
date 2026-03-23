@@ -27,7 +27,6 @@ export interface TurnoverContext {
   activeTimelineKeySet: Set<string>;
   activeCount: number;
   periodMonths: number;
-  timelineLength: number;
 }
 
 export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
@@ -40,7 +39,6 @@ export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint
     activeTimelineKeySet: new Set(unique),
     activeCount: unique.length,
     periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
-    timelineLength: timeline.length,
   };
 };
 
@@ -52,16 +50,12 @@ export const resolveTurnoverForMonth = (
 ): number => {
   if (inputs.turnoverValue <= 0 || !ctx.activeTimelineKeySet.has(monthKey) || ctx.activeCount === 0) return 0;
 
-  const timelineFractionOfPeriod = ctx.timelineLength / ctx.periodMonths;
-
   if (inputs.turnoverInputMode === "percentual") {
-    const intendedTotalPct = (inputs.turnoverValue / 100) * timelineFractionOfPeriod;
-    const pctPerActiveMonth = intendedTotalPct / ctx.activeCount;
-    return hcBase * pctPerActiveMonth;
+    const monthlyRate = (inputs.turnoverValue / 100) / ctx.periodMonths;
+    return hcBase * monthlyRate;
   }
 
-  const intendedTotalAbs = inputs.turnoverValue * timelineFractionOfPeriod;
-  return intendedTotalAbs / ctx.activeCount;
+  return inputs.turnoverValue / ctx.periodMonths;
 };
 
 export const buildTurnoverFormula = (
@@ -81,12 +75,10 @@ export const buildTurnoverFormula = (
   if (ctx.activeCount === 0) return `${prefix} | sem meses ativos = 0`;
   if (!isActive) return `${prefix} | mês inativo = 0`;
 
-  const fractionRatio = `${ctx.timelineLength}/${ctx.periodMonths} da meta no período`;
-
   if (inputs.turnoverInputMode === "percentual") {
-    return `${prefix} | Base: HC (${fmt(hcBase)}) | (${fmt(inputs.turnoverValue)}% × ${fractionRatio}) ÷ ${ctx.activeCount} ativações = ${fmt(turnover)}`;
+    return `${prefix} | Base: HC (${fmt(hcBase)}) | (${fmt(inputs.turnoverValue)}% ÷ ${ctx.periodMonths} meses) = ${fmt(turnover)}`;
   }
 
-  return `${prefix} | (${fmt(inputs.turnoverValue)} abs × ${fractionRatio}) ÷ ${ctx.activeCount} ativações = ${fmt(turnover)}`;
+  return `${prefix} | ${fmt(inputs.turnoverValue)} abs ÷ ${ctx.periodMonths} meses = ${fmt(turnover)}`;
 };
 

@@ -60,8 +60,11 @@ function runSimulationWithCohorts(
     const agentsNeededRaw = demand.volumeHuman / Math.max(1, capacityPerAgent);
     const agentsNeeded = Math.ceil(agentsNeededRaw);
 
+    const activePastCohorts = simCohorts.filter(c => c.startIndex < index);
+    const allActiveCohorts = simCohorts.filter(c => c.startIndex <= index);
+
     const hcNominalStart = Math.max(0,
-      legacyNominal + simCohorts.reduce((acc, c) => acc + c.count, 0)
+      legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0)
     );
 
     const turnoverBase = hcNominalStart;
@@ -71,14 +74,14 @@ function runSimulationWithCohorts(
     let turnoverAppliedEnd = 0;
 
     if (inputs.turnoverTiming === "start_of_month" && turnover > 0) {
-      turnoverAppliedStart = turnover;
+      turnoverAppliedStart = Math.min(turnover, hcNominalStart); // Protect over-turnover
       let remainingTurnover = turnoverAppliedStart;
       const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
       legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
       remainingTurnover -= legacyTurnover;
 
-      for (let ci = 0; ci < simCohorts.length && remainingTurnover > 0; ci++) {
-        const c = simCohorts[ci];
+      for (let ci = 0; ci < activePastCohorts.length && remainingTurnover > 0; ci++) {
+        const c = activePastCohorts[ci];
         const ct = Math.min(c.count, remainingTurnover);
         c.count -= ct;
         remainingTurnover -= ct;
@@ -86,25 +89,23 @@ function runSimulationWithCohorts(
     }
 
     const hcNominalAfterTurnoverStart = Math.max(0,
-      legacyNominal + simCohorts.reduce((acc, c) => acc + c.count, 0)
+      legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0)
     );
 
     const cohortContributions: CohortContribution[] = [];
     let hcEffectiveFromExisting = legacyNominal;
 
-    for (const cohort of simCohorts) {
-      if (index >= cohort.startIndex) {
-        const monthsSinceStart = index - cohort.startIndex;
-        const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
-        const effective = cohort.count * rampFactor;
-        hcEffectiveFromExisting += effective;
-        cohortContributions.push({
-          monthIndex: cohort.openedAtIndex,
-          nominal: cohort.count,
-          effective,
-          rampFactor,
-        });
-      }
+    for (const cohort of allActiveCohorts) {
+      const monthsSinceStart = index - cohort.startIndex;
+      const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
+      const effective = cohort.count * rampFactor;
+      hcEffectiveFromExisting += effective;
+      cohortContributions.push({
+        monthIndex: cohort.openedAtIndex,
+        nominal: cohort.count,
+        effective,
+        rampFactor,
+      });
     }
 
     const hcEffectiveBeforeHires = hcEffectiveFromExisting;
@@ -119,14 +120,16 @@ function runSimulationWithCohorts(
     );
 
     if (inputs.turnoverTiming === "end_of_month" && turnover > 0) {
-      turnoverAppliedEnd = turnover;
+      // For end_of_month, turnover can hit the new hires that started this month too
+      const currentNominal = legacyNominal + allActiveCohorts.reduce((acc, c) => acc + c.count, 0);
+      turnoverAppliedEnd = Math.min(turnover, currentNominal);
       let remainingTurnover = turnoverAppliedEnd;
       const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
       legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
       remainingTurnover -= legacyTurnover;
 
-      for (let ci = 0; ci < simCohorts.length && remainingTurnover > 0; ci++) {
-        const c = simCohorts[ci];
+      for (let ci = 0; ci < allActiveCohorts.length && remainingTurnover > 0; ci++) {
+        const c = allActiveCohorts[ci];
         const ct = Math.min(c.count, remainingTurnover);
         c.count -= ct;
         remainingTurnover -= ct;
@@ -134,7 +137,7 @@ function runSimulationWithCohorts(
     }
 
     const hcFinal = Math.max(0,
-      legacyNominal + simCohorts.reduce((acc, c) => acc + c.count, 0),
+      legacyNominal + allActiveCohorts.reduce((acc, c) => acc + c.count, 0),
     );
 
     const risk = computeRisk(gap);

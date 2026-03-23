@@ -232,24 +232,131 @@ describe("turnover timing", () => {
   });
 });
 
-// ── Turnover crossing year ──
+// ── Turnover strict periodicity rules ──
 
-describe("turnover crossing year boundary", () => {
-  it("distributes turnover correctly across Nov-Feb", () => {
-    const proj = runPlannerProjection(minimal({
+describe("turnover strict periodicity and base logic", () => {
+  const baseConfig = {
+    startMonth: 1,
+    endMonth: 6,
+    headcountCurrent: 20, // HC Base = 20
+    leadTimeMonths: 0,
+    growthMode: "linear" as const,
+    currentClients: 1000,
+    targetClientsQ4: 1000,
+    currentVolume: 1000,
+    manualGrowthByMonth: {},
+    contactRate: 1,
+    productivityBase: 200,
+    mixN1Pct: 50,
+    mixN2Pct: 50,
+    tmaN1: 10,
+    tmaN2: 15,
+    rampUpMonths: 3,
+    vacationPct: 0,
+    vacationEligiblePct: 0,
+    breaksPct: 0,
+    offchatPct: 0,
+    meetingsPct: 0,
+    aiCoveragePct: 0,
+    aiGrowthMonthlyPct: 0,
+    extraAutomationPct: 0,
+    hiringMode: "gap" as const,
+    turnoverTiming: "end_of_month" as const,
+  };
+
+  it("anual + absoluto + Nov->Fev: distribui independentemente da timeline", () => {
+    const proj = runPlannerProjection({
+      ...baseConfig,
       startMonth: 11,
-      endMonth: 2,
-      headcountCurrent: 10,
+      endMonth: 2, // 4 month timeline
       turnoverValue: 12, // 12 por ano
       turnoverPeriod: "anual",
       turnoverInputMode: "absoluto",
       turnoverMonths: ["2026-11", "2026-12", "2027-01", "2027-02"],
-      leadTimeMonths: 0,
-    }));
+    });
 
     expect(proj.timeline).toHaveLength(4);
-    // 12/ano = 1/mês. Numa simulação de 4 meses marcando todos os 4, teríamos 1 em cada
+    // 12 abs / 12 meses = 1.0 por mês ativo
     expect(proj.rows.map((r) => r.turnover)).toEqual([1, 1, 1, 1]);
+  });
+
+  it("anual + percentual: base HC * (percentual / 12)", () => {
+    const proj = runPlannerProjection({
+      ...baseConfig,
+      turnoverValue: 12, // 12% por ano
+      turnoverPeriod: "anual",
+      turnoverInputMode: "percentual",
+      turnoverMonths: ["2026-01"],
+    });
+
+    // HC = 20. 12% ao ano = 1% ao mês. 1% de 20 = 0.2
+    expect(proj.rows[0].turnover).toBeCloseTo(0.2);
+  });
+
+  it("semestral + absoluto: valor / 6", () => {
+    const proj = runPlannerProjection({
+      ...baseConfig,
+      turnoverValue: 12, // 12 por semestre
+      turnoverPeriod: "semestral",
+      turnoverInputMode: "absoluto",
+      turnoverMonths: ["2026-01"],
+    });
+
+    // 12 abs / 6 meses = 2.0 por mês ativo
+    expect(proj.rows[0].turnover).toBe(2);
+  });
+
+  it("semestral + percentual: base HC * (percentual / 6)", () => {
+    const proj = runPlannerProjection({
+      ...baseConfig,
+      turnoverValue: 12, // 12% por semestre
+      turnoverPeriod: "semestral",
+      turnoverInputMode: "percentual",
+      turnoverMonths: ["2026-01"],
+    });
+
+    // HC = 20. 12% ao semestre = 2% ao mês. 2% de 20 = 0.4
+    expect(proj.rows[0].turnover).toBeCloseTo(0.4);
+  });
+
+  it("meses inativos recebem 0", () => {
+    const proj = runPlannerProjection({
+      ...baseConfig,
+      turnoverValue: 12,
+      turnoverPeriod: "anual",
+      turnoverInputMode: "absoluto",
+      turnoverMonths: ["2026-02"], // Apenas Fev
+    });
+
+    expect(proj.rows[0].month.key).toBe("2026-01");
+    expect(proj.rows[0].turnover).toBe(0); // Jan is inactive
+    
+    expect(proj.rows[1].month.key).toBe("2026-02");
+    expect(proj.rows[1].turnover).toBe(1); // Feb is active
+  });
+
+  it("independência da duração da timeline", () => {
+    const configMensal = {
+      ...baseConfig,
+      turnoverValue: 2, // 2 abs mensais
+      turnoverPeriod: "mensal" as const,
+      turnoverInputMode: "absoluto" as const,
+    };
+
+    // Timeline 3 months
+    const proj3 = runPlannerProjection({
+      ...configMensal, startMonth: 1, endMonth: 3,
+      turnoverMonths: ["2026-01", "2026-02"],
+    });
+    // Timeline 6 months
+    const proj6 = runPlannerProjection({
+      ...configMensal, startMonth: 1, endMonth: 6,
+      turnoverMonths: ["2026-01", "2026-02"],
+    });
+
+    expect(proj3.rows[0].turnover).toBe(2);
+    expect(proj6.rows[0].turnover).toBe(2);
+    expect(proj3.rows[0].turnoverFormula).toBe(proj6.rows[0].turnoverFormula);
   });
 });
 
