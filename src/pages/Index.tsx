@@ -106,22 +106,25 @@ const SimpleNumberField = ({
     setDraftValue(toDisplayValue(next));
   };
 
+  const isDisplayingSavedValue = draftValue === toDisplayValue(value);
   const normalizedDraft = draftValue.trim();
   const hasDraft = normalizedDraft.length > 0;
   const isTransient = isTransientNumericInput(normalizedDraft);
   const parsedDraft = !isTransient ? parseLooseNumber(normalizedDraft) : null;
   const isDraftNumeric = hasDraft && !isTransient && Number.isFinite(parsedDraft);
-  const isBelowMin = isDraftNumeric && min !== undefined && parsedDraft < min;
-  const isAboveMax = isDraftNumeric && max !== undefined && parsedDraft > max;
+  const isBelowMin = isDraftNumeric && min !== undefined && parsedDraft! < min;
+  const isAboveMax = isDraftNumeric && max !== undefined && parsedDraft! > max;
   const isInvalidValue = hasDraft && !isTransient && !isDraftNumeric;
 
-  const validationMessage = isInvalidValue
-    ? "Digite um número válido."
-    : isBelowMin
-      ? `Valor mínimo: ${formatNumberForDisplay(min!, formatType, resolvedDecimalDigits)}.`
-      : isAboveMax
-        ? `Valor máximo: ${formatNumberForDisplay(max!, formatType, resolvedDecimalDigits)}.`
-        : null;
+  const validationMessage = isDisplayingSavedValue
+    ? null
+    : isInvalidValue
+      ? "Digite um número válido."
+      : isBelowMin
+        ? `Valor mínimo: ${formatNumberForDisplay(min!, formatType, resolvedDecimalDigits)}.`
+        : isAboveMax
+          ? `Valor máximo: ${formatNumberForDisplay(max!, formatType, resolvedDecimalDigits)}.`
+          : null;
 
   return (
     <div className="space-y-2">
