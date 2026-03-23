@@ -5,16 +5,9 @@ const BASE_YEAR = 2026;
 const toTimelineKey = (month: number, year = BASE_YEAR) => `${year}-${String(month).padStart(2, "0")}`;
 
 const baseManualGrowthByMonth: Record<number, number> = {
-  3: 3.4,
-  4: 3.4,
-  5: 3.6,
-  6: 3.6,
-  7: 3.8,
-  8: 3.8,
-  9: 3.9,
-  10: 3.9,
-  11: 4,
-  12: 4,
+  3: 3.4, 4: 3.4, 5: 3.6, 6: 3.6,
+  7: 3.8, 8: 3.8, 9: 3.9, 10: 3.9,
+  11: 4, 12: 4,
 };
 
 const baseManualGrowth = Object.fromEntries(
@@ -55,6 +48,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     turnoverValue: 3,
     turnoverPeriod: "anual",
     turnoverInputMode: "absoluto",
+    turnoverTiming: "end_of_month",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
@@ -91,6 +85,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     turnoverValue: 2,
     turnoverPeriod: "anual",
     turnoverInputMode: "absoluto",
+    turnoverTiming: "end_of_month",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 2,
@@ -127,6 +122,7 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     turnoverValue: 4,
     turnoverPeriod: "anual",
     turnoverInputMode: "absoluto",
+    turnoverTiming: "end_of_month",
     turnoverMonths: [...defaultTurnoverMonths],
 
     leadTimeMonths: 3,
@@ -165,6 +161,7 @@ export const EMPTY_PLANNER_INPUTS: PlannerInputs = {
   turnoverValue: 0,
   turnoverPeriod: "anual",
   turnoverInputMode: "absoluto",
+  turnoverTiming: "end_of_month",
   turnoverMonths: [],
 
   leadTimeMonths: 0,

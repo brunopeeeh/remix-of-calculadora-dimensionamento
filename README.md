@@ -1,73 +1,60 @@
-# Welcome to your Lovable project
+# Calculadora de Dimensionamento Operacional
 
-## Project info
+Ferramenta de planejamento que projeta volume de demanda, deflexão de IA, capacidade por agente, headcount disponível, gap operacional e timing de contratação mês a mês.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Stack
 
-## How can I edit this code?
+- **Vite** + **React 18** + **TypeScript**
+- **shadcn/ui** + **Tailwind CSS** (design system com tokens semânticos)
+- **Recharts** para gráficos
+- **Vitest** para testes unitários
 
-There are several ways of editing your application.
+## Estrutura do projeto
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+src/
+├── features/ops-planning/      # Domínio e motor de cálculo
+│   ├── calculator.ts           # Orquestrador da projeção
+│   ├── capacity.ts             # Capacidade por agente e contact rate
+│   ├── demand.ts               # Cálculo de demanda mensal
+│   ├── ramp.ts                 # Fator de rampa e maturação
+│   ├── timeline.ts             # Construção da timeline YYYY-MM
+│   ├── turnover.ts             # Cálculo e auditoria de turnover
+│   ├── types.ts                # Tipos do domínio
+│   ├── scenarios.ts            # Presets de cenários
+│   ├── usePlannerState.ts      # Hook de estado da sidebar
+│   └── usePlannerProjection.ts # Hook de projeção reativa
+├── components/ops/             # Componentes visuais da calculadora
+│   ├── SidebarPanel.tsx        # Painel lateral de inputs
+│   ├── KPISection.tsx          # Grid de KPIs
+│   ├── ChartsSection.tsx       # Gráficos Recharts
+│   ├── MonthlyTable.tsx        # Tabela mensal detalhada
+│   ├── MonthlyAuditPanel.tsx   # Painel de auditoria matemática
+│   ├── HiringTimeline.tsx      # Timeline de contratação
+│   └── SimpleNumberField.tsx   # Campo numérico reutilizável
+├── pages/
+│   └── Index.tsx               # Composição da página principal
+└── test/
+    └── calculator.test.ts      # Suíte de testes do motor
 ```
 
-**Edit a file directly in GitHub**
+## Como rodar
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm install
+npm run dev      # Dev server
+npm test         # Testes unitários
+npm run build    # Build de produção
+```
 
-**Use GitHub Codespaces**
+## Lógica de contratação
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- **leadTimeMonths**: tempo entre abrir uma vaga e o contratado iniciar. Afeta diretamente quando a capacidade entra na simulação.
+- **hiringMode "gap"**: abre a vaga no mês do gap; contratado inicia após lead time.
+- **hiringMode "antecipado"**: abre a vaga antecipadamente (lead time + ramp-up) para que o contratado esteja maduro no mês do gap.
 
-## What technologies are used for this project?
+## Lógica de turnover
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- **turnoverTiming "start_of_month"**: saídas são descontadas antes de avaliar gap.
+- **turnoverTiming "end_of_month"**: saídas são descontadas após contratação e ramp-up do mês.
+- Suporta períodos mensal, semestral e anual com distribuição pelos meses selecionados.
