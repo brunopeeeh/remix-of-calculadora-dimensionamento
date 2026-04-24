@@ -2,14 +2,30 @@ import { MonthPoint, PlannerInputs, TurnoverTiming } from "./types";
 
 const getTurnoverPeriodMonths = (period: PlannerInputs["turnoverPeriod"]): number => {
   if (period === "mensal") return 1;
+  if (period === "trimestral") return 3;
   if (period === "semestral") return 6;
   return 12;
 };
 
 const formatTurnoverPeriod = (period: PlannerInputs["turnoverPeriod"]): string => {
   if (period === "mensal") return "Mensal";
+  if (period === "trimestral") return "Trimestral";
   if (period === "semestral") return "Semestral";
   return "Anual";
+};
+
+export const getAutoTurnoverMonths = (
+  period: PlannerInputs["turnoverPeriod"],
+  timeline: MonthPoint[]
+): string[] => {
+  if (timeline.length === 0) return [];
+  const step = getTurnoverPeriodMonths(period);
+  const result: string[] = [];
+  // Gatilho ocorre a cada `step` meses a partir do primeiro mês (timeline[0])
+  for (let i = 0; i < timeline.length; i += step) {
+    result.push(timeline[i].key);
+  }
+  return result;
 };
 
 const formatTurnoverMode = (mode: PlannerInputs["turnoverInputMode"]): string => {
@@ -30,10 +46,19 @@ export interface TurnoverContext {
 }
 
 export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
-  const activeTimelineKeys = timeline
-    .map((p) => p.key)
-    .filter((key) => inputs.turnoverMonths.includes(key));
-  const unique = [...new Set(activeTimelineKeys)];
+  // If user has manually selected specific months, respect those
+  if (inputs.turnoverMonths.length > 0) {
+    const unique = [...new Set(inputs.turnoverMonths)];
+    return {
+      activeTimelineKeySet: new Set(unique),
+      activeCount: unique.length,
+      periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
+    };
+  }
+
+  // Otherwise, fall back to automatic calculation based on period
+  const autoTimelineKeys = getAutoTurnoverMonths(inputs.turnoverPeriod, timeline);
+  const unique = [...new Set(autoTimelineKeys)];
 
   return {
     activeTimelineKeySet: new Set(unique),
@@ -50,12 +75,14 @@ export const resolveTurnoverForMonth = (
 ): number => {
   if (inputs.turnoverValue <= 0 || !ctx.activeTimelineKeySet.has(monthKey) || ctx.activeCount === 0) return 0;
 
+  const monthlyRate = inputs.turnoverValue / ctx.periodMonths;
+  const clampedRate = Math.min(monthlyRate, 50);
+
   if (inputs.turnoverInputMode === "percentual") {
-    const monthlyRate = (inputs.turnoverValue / 100) / ctx.periodMonths;
-    return hcBase * monthlyRate;
+    return hcBase * (clampedRate / 100);
   }
 
-  return inputs.turnoverValue / ctx.periodMonths;
+  return clampedRate;
 };
 
 export const buildTurnoverFormula = (
@@ -75,10 +102,13 @@ export const buildTurnoverFormula = (
   if (ctx.activeCount === 0) return `${prefix} | sem meses ativos = 0`;
   if (!isActive) return `${prefix} | mês inativo = 0`;
 
+  const monthlyRate = inputs.turnoverValue / ctx.periodMonths;
+  const clampedRate = Math.min(monthlyRate, 50);
+
   if (inputs.turnoverInputMode === "percentual") {
-    return `${prefix} | Base: HC (${fmt(hcBase)}) | (${fmt(inputs.turnoverValue)}% ÷ ${ctx.periodMonths} meses) = ${fmt(turnover)}`;
+    return `${prefix} | Base: HC (${fmt(hcBase)}) | ${fmt(clampedRate)}% mensal = ${fmt(turnover)}`;
   }
 
-  return `${prefix} | ${fmt(inputs.turnoverValue)} abs ÷ ${ctx.periodMonths} meses = ${fmt(turnover)}`;
+  return `${prefix} | ${fmt(clampedRate)} abs/mês = ${fmt(turnover)}`;
 };
 

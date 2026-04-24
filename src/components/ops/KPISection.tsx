@@ -1,13 +1,15 @@
 import { KPIWidget } from "./KPIWidget";
 import { formatInt } from "@/features/ops-planning/format";
 import { ProjectionSummary, PlannerInputs } from "@/features/ops-planning/types";
+import { ReactNode } from "react";
 
 interface KPISectionProps {
   summary: ProjectionSummary;
   rampUpMonths: number;
+  hiringAction?: ReactNode;
 }
 
-export const KPISection = ({ summary, rampUpMonths }: KPISectionProps) => {
+export const KPISection = ({ summary, rampUpMonths, hiringAction }: KPISectionProps) => {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       <KPIWidget
@@ -39,6 +41,7 @@ export const KPISection = ({ summary, rampUpMonths }: KPISectionProps) => {
         value={summary.agentsNeededQ4}
         format={(v) => formatInt(v)}
         tone={summary.riskMonths.length > 0 ? "risk" : "default"}
+        isProminent
       />
       <KPIWidget
         title="Admissões no ano"
@@ -53,6 +56,8 @@ export const KPISection = ({ summary, rampUpMonths }: KPISectionProps) => {
         tooltip={`Mês da necessidade - lead time - maturação da rampa (ramp-up ${rampUpMonths} meses)`}
         value={summary.criticalOpenMonth}
         tone={summary.riskMonths.length > 0 ? "risk" : "success"}
+        isProminent
+        action={hiringAction}
       />
     </section>
   );

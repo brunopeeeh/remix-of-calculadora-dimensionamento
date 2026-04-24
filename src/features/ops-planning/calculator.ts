@@ -12,11 +12,14 @@ export { resolveContactRate } from "./capacity";
 // ── Cohort tracking ──
 
 interface HireCohort {
-  /** Index in the timeline when this cohort was *opened* (vacancy created) */
   openedAtIndex: number;
-  /** Index in the timeline when these hires actually start working */
   startIndex: number;
   count: number;
+}
+
+interface SimulationState {
+  legacyNominal: number;
+  cohorts: HireCohort[];
 }
 
 const computeRisk = (gap: number) => {
@@ -25,181 +28,125 @@ const computeRisk = (gap: number) => {
   return "critical" as const;
 };
 
-// ── Main projection ──
+const getActivePastCohorts = (cohorts: HireCohort[], index: number) =>
+  cohorts.filter(c => c.startIndex < index);
 
-/**
- * Helper to run the simulation month by month using a specific set of committed cohorts.
- * This does not evaluate or create new hires.
- */
-function runSimulationWithCohorts(
-  inputs: PlannerInputs,
-  timeline: MonthPoint[],
-  readonlyCohorts: HireCohort[]
-): MonthlyProjection[] {
-  const capacityPerAgent = computeCapacityPerAgent(inputs);
-  const contactRate = resolveContactRate(inputs);
-  const turnoverContext = buildTurnoverContext(inputs, timeline);
-  const totalSteps = Math.max(1, timeline.length - 1);
-  const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
-  const fallbackGrowth = computeFallbackManualGrowthPct(inputs, totalSteps);
+const getAllActiveCohorts = (cohorts: HireCohort[], index: number) =>
+  cohorts.filter(c => c.startIndex <= index);
 
-  const rows: MonthlyProjection[] = [];
-  let previousClients = inputs.currentClients;
-  let legacyNominal = inputs.headcountCurrent;
+const computeHCNominalStart = (state: SimulationState, activePastCohorts: HireCohort[]): number =>
+  Math.max(0, state.legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0));
 
-  // Deep copy elements that we will mutate with turnover
-  const simCohorts = readonlyCohorts.map((c) => ({ ...c }));
+const applyTurnoverStartOfMonth = (
+  state: SimulationState,
+  turnover: number,
+  hcNominalStart: number,
+  activePastCohorts: HireCohort[]
+): number => {
+  const turnoverApplied = Math.min(turnover, hcNominalStart);
+  let remainingTurnover = turnoverApplied;
+  
+  const legacyTurnover = Math.min(state.legacyNominal, remainingTurnover);
+  state.legacyNominal = Math.max(0, state.legacyNominal - legacyTurnover);
+  remainingTurnover -= legacyTurnover;
 
-  for (let index = 0; index < timeline.length; index++) {
-    const point = timeline[index];
+  for (const c of activePastCohorts) {
+    if (remainingTurnover <= 0) break;
+    const ct = Math.min(c.count, remainingTurnover);
+    c.count -= ct;
+    remainingTurnover -= ct;
+  }
+  
+  return turnoverApplied;
+};
 
-    const demand = computeDemandForMonth(
-      inputs, point, index, previousClients, contactRate, linearStep, fallbackGrowth,
-    );
+const applyTurnoverEndOfMonth = (
+  state: SimulationState,
+  turnover: number,
+  activePastCohorts: HireCohort[]
+): number => {
+  const currentNominal = state.legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0);
+  const turnoverApplied = Math.min(turnover, currentNominal);
+  let remainingTurnover = turnoverApplied;
+  
+  const legacyTurnover = Math.min(state.legacyNominal, remainingTurnover);
+  state.legacyNominal = Math.max(0, state.legacyNominal - legacyTurnover);
+  remainingTurnover -= legacyTurnover;
 
-    const agentsNeededRaw = demand.volumeHuman / Math.max(1, capacityPerAgent);
-    const agentsNeeded = Math.ceil(agentsNeededRaw);
+  for (const c of activePastCohorts) {
+    if (remainingTurnover <= 0) break;
+    const ct = Math.min(c.count, remainingTurnover);
+    c.count -= ct;
+    remainingTurnover -= ct;
+  }
+  
+  return turnoverApplied;
+};
 
-    const activePastCohorts = simCohorts.filter(c => c.startIndex < index);
-    const allActiveCohorts = simCohorts.filter(c => c.startIndex <= index);
+const computeHCEffective = (
+  state: SimulationState,
+  allActiveCohorts: HireCohort[],
+  index: number,
+  rampUpMonths: number
+): { hcEffective: number; contributions: CohortContribution[] } => {
+  const contributions: CohortContribution[] = [];
+  let hcEffective = state.legacyNominal;
 
-    const hcNominalStart = Math.max(0,
-      legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0)
-    );
-
-    const turnoverBase = hcNominalStart;
-    const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, turnoverBase);
-    
-    let turnoverAppliedStart = 0;
-    let turnoverAppliedEnd = 0;
-
-    if (inputs.turnoverTiming === "start_of_month" && turnover > 0) {
-      turnoverAppliedStart = Math.min(turnover, hcNominalStart); // Protect over-turnover
-      let remainingTurnover = turnoverAppliedStart;
-      const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
-      legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
-      remainingTurnover -= legacyTurnover;
-
-      for (let ci = 0; ci < activePastCohorts.length && remainingTurnover > 0; ci++) {
-        const c = activePastCohorts[ci];
-        const ct = Math.min(c.count, remainingTurnover);
-        c.count -= ct;
-        remainingTurnover -= ct;
-      }
-    }
-
-    const hcNominalAfterTurnoverStart = Math.max(0,
-      legacyNominal + activePastCohorts.reduce((acc, c) => acc + c.count, 0)
-    );
-
-    const cohortContributions: CohortContribution[] = [];
-    let hcEffectiveFromExisting = legacyNominal;
-
-    for (const cohort of allActiveCohorts) {
-      const monthsSinceStart = index - cohort.startIndex;
-      const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
-      const effective = cohort.count * rampFactor;
-      hcEffectiveFromExisting += effective;
-      cohortContributions.push({
-        monthIndex: cohort.openedAtIndex,
-        nominal: cohort.count,
-        effective,
-        rampFactor,
-      });
-    }
-
-    const hcEffectiveBeforeHires = hcEffectiveFromExisting;
-    const hcAvailableEffective = hcEffectiveBeforeHires;
-    const capacityAvailableTotal = hcAvailableEffective * capacityPerAgent;
-
-    const gapFte = Math.max(0, agentsNeeded - hcAvailableEffective);
-    const gap = Math.ceil(gapFte);
-
-    const turnoverFormula = buildTurnoverFormula(
-      inputs, turnoverContext, point.key, turnoverBase, turnover,
-    );
-
-    if (inputs.turnoverTiming === "end_of_month" && turnover > 0) {
-      // For end_of_month, turnover can hit the new hires that started this month too
-      const currentNominal = legacyNominal + allActiveCohorts.reduce((acc, c) => acc + c.count, 0);
-      turnoverAppliedEnd = Math.min(turnover, currentNominal);
-      let remainingTurnover = turnoverAppliedEnd;
-      const legacyTurnover = Math.min(legacyNominal, remainingTurnover);
-      legacyNominal = Math.max(0, legacyNominal - legacyTurnover);
-      remainingTurnover -= legacyTurnover;
-
-      for (let ci = 0; ci < allActiveCohorts.length && remainingTurnover > 0; ci++) {
-        const c = allActiveCohorts[ci];
-        const ct = Math.min(c.count, remainingTurnover);
-        c.count -= ct;
-        remainingTurnover -= ct;
-      }
-    }
-
-    const hcFinal = Math.max(0,
-      legacyNominal + allActiveCohorts.reduce((acc, c) => acc + c.count, 0),
-    );
-
-    const risk = computeRisk(gap);
-
-    let hiresStarted = 0;
-    let hiresOpened = 0;
-    
-    for (const cohort of readonlyCohorts) {
-      if (cohort.startIndex === index) {
-        hiresStarted += cohort.count;
-      }
-      if (cohort.openedAtIndex === index) {
-        hiresOpened += cohort.count;
-      }
-    }
-    
-    const rampOffset = inputs.hiringMode === "antecipado" ? getRampMaturationOffset(inputs.rampUpMonths) : 0;
-    const openOffset = inputs.leadTimeMonths + rampOffset;
-    const openMonthIndex = index - openOffset;
-    const openIn = openMonthIndex >= 0 && openMonthIndex < timeline.length
-      ? timeline[openMonthIndex].label
-      : "Antes do período";
-
-    rows.push({
-      month: point,
-      ...demand,
-      capacityPerAgent,
-      capacityAvailableTotal,
-      agentsNeededRaw,
-      agentsNeeded,
-      hcNominalStart,
-      turnoverAppliedStart,
-      hcNominalAfterTurnoverStart,
-      hcEffectiveBeforeHires,
-      hcAvailableEffective,
-      hcInitial: hcNominalStart,
-      turnover,
-      turnoverFormula,
-      turnoverTiming: inputs.turnoverTiming,
-      turnoverAppliedEnd,
-      hcFinal,
-      gapFte,
-      gap,
-      // For backward compatibility: in the old system 'hire' mapped strictly to
-      // 'vacancies opened AT THIS index'.
-      hire: hiresOpened,
-      hiresOpened,
-      hiresStarted,
-      cohortContributions,
-      openIn,
-      openMonthIndex,
-      risk,
+  for (const cohort of allActiveCohorts) {
+    const monthsSinceStart = index - cohort.startIndex;
+    const rampFactor = getRampFactor(monthsSinceStart, rampUpMonths);
+    const effective = cohort.count * rampFactor;
+    hcEffective += effective;
+    contributions.push({
+      monthIndex: cohort.openedAtIndex,
+      nominal: cohort.count,
+      effective,
+      rampFactor,
     });
-
-    previousClients = demand.clientsBase;
   }
 
-  return rows;
-}
+  return { hcEffective, contributions };
+};
+
+const computeHireActions = (
+  cohorts: HireCohort[],
+  index: number
+): { hiresOpened: number; hiresStarted: number } => {
+  let hiresOpened = 0;
+  let hiresStarted = 0;
+  
+  for (const cohort of cohorts) {
+    if (cohort.startIndex === index) hiresStarted += cohort.count;
+    if (cohort.openedAtIndex === index) hiresOpened += cohort.count;
+  }
+  
+  return { hiresOpened, hiresStarted };
+};
+
+const computeOpenTiming = (
+  inputs: Pick<PlannerInputs, "hiringMode" | "rampUpMonths" | "leadTimeMonths">,
+  index: number,
+  timeline: MonthPoint[]
+): { openMonthIndex: number; openIn: string; targetImpactIndex: number; targetImpactLabel: string } => {
+  const rampOffset = inputs.hiringMode === "antecipado" 
+    ? getRampMaturationOffset(inputs.rampUpMonths) 
+    : 0;
+  const openOffset = inputs.leadTimeMonths + rampOffset;
+  const openMonthIndex = index - openOffset;
+  const openIn = openMonthIndex >= 0 && openMonthIndex < timeline.length
+    ? timeline[openMonthIndex].label
+    : "Antes do período";
+
+  const targetImpactIndex = index + openOffset;
+  const targetImpactLabel = targetImpactIndex < timeline.length
+    ? timeline[targetImpactIndex].label
+    : "Fora do período";
+
+  return { openMonthIndex, openIn, targetImpactIndex, targetImpactLabel };
+};
 
 export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult => {
-  const timeline = buildTimeline(inputs.startMonth, inputs.endMonth);
+  const timeline = buildTimeline(inputs.startMonth, inputs.startYear, inputs.endMonth, inputs.endYear);
 
   if (timeline.length === 0) {
     return {
@@ -213,45 +160,152 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     };
   }
 
+  const capacityPerAgent = computeCapacityPerAgent(inputs);
+  const contactRate = resolveContactRate(inputs);
+  const turnoverContext = buildTurnoverContext(inputs, timeline);
+  const totalSteps = Math.max(1, timeline.length - 1);
+  const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
+  const fallbackGrowth = computeFallbackManualGrowthPct(inputs, totalSteps);
+  const rampOffset = inputs.hiringMode === "antecipado" 
+    ? getRampMaturationOffset(inputs.rampUpMonths) 
+    : 0;
+  const totalOffset = inputs.leadTimeMonths + rampOffset;
+
   const cohorts: HireCohort[] = [];
+  const demandCache: Map<number, { clientsBase: number; contactRate: number; volumeGross: number; aiPct: number; volumeAI: number; volumeHuman: number }> = new Map();
+  let previousClients = inputs.currentClients;
 
   for (let index = 0; index < timeline.length; index++) {
-    const rampOffset = inputs.hiringMode === "antecipado" ? getRampMaturationOffset(inputs.rampUpMonths) : 0;
-    const intendedImpactIndex = index + inputs.leadTimeMonths + rampOffset;
+    const point = timeline[index];
+    const seasonalityPct = inputs.manualSeasonalityByMonth?.[point.key] ?? 0;
+    const demand = computeDemandForMonth(
+      inputs, point, index, previousClients, contactRate, linearStep, fallbackGrowth, seasonalityPct
+    );
+    demandCache.set(index, demand);
+    previousClients = demand.clientsBase;
+  }
 
-    const currentSimulation = runSimulationWithCohorts(inputs, timeline, cohorts);
+  for (let index = 0; index < timeline.length; index++) {
+    const demand = demandCache.get(index)!;
+    const agentsNeededRaw = demand.volumeHuman / Math.max(1, capacityPerAgent);
+    const agentsNeeded = Math.ceil(agentsNeededRaw);
 
-    let maxGapToCover = 0;
-
-    if (index === 0) {
-      const limit = Math.min(timeline.length - 1, intendedImpactIndex);
-      for (let k = inputs.leadTimeMonths; k <= limit; k++) {
-        maxGapToCover = Math.max(maxGapToCover, currentSimulation[k].gapFte);
+    // Mirror the simulation pass: base HC + sum of all active cohorts weighted by ramp factor.
+    // Do NOT add cohort.count to legacyNominal — that would double-count cohorts that have
+    // already started, since they also appear in the ramp-factor sum.
+    let hcEffective = inputs.headcountCurrent;
+    for (const c of cohorts) {
+      if (c.startIndex <= index) {
+        const monthsSinceStart = index - c.startIndex;
+        const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
+        hcEffective += c.count * rampFactor;
       }
-    } else {
-      if (intendedImpactIndex < timeline.length) {
-        maxGapToCover = currentSimulation[intendedImpactIndex].gapFte;
-      } else {
-        const startIndex = index + inputs.leadTimeMonths;
-        if (startIndex < timeline.length) {
-          maxGapToCover = currentSimulation[timeline.length - 1].gapFte;
+    }
+
+    if (agentsNeeded > hcEffective) {
+      const gapFte = agentsNeeded - hcEffective;
+      const startIndex = index + inputs.leadTimeMonths;
+      if (startIndex < timeline.length) {
+        const existingCohort = cohorts.find(c => c.startIndex === startIndex);
+        if (existingCohort) {
+          existingCohort.count = Math.max(existingCohort.count, Math.ceil(gapFte));
+        } else {
+          cohorts.push({
+            openedAtIndex: index,
+            startIndex,
+            count: Math.ceil(gapFte),
+          });
         }
       }
     }
-
-    if (maxGapToCover > 0) {
-      cohorts.push({
-        openedAtIndex: index,
-        startIndex: index + inputs.leadTimeMonths,
-        count: Math.ceil(maxGapToCover),
-      });
-    }
   }
 
-  const rows = runSimulationWithCohorts(inputs, timeline, cohorts);
+  const rows: MonthlyProjection[] = [];
+  const state: SimulationState = {
+    legacyNominal: inputs.headcountCurrent,
+    cohorts: cohorts.map(c => ({ ...c })),
+  };
+
+  for (let index = 0; index < timeline.length; index++) {
+    const point = timeline[index];
+    const demand = demandCache.get(index)!;
+
+    const agentsNeededRaw = demand.volumeHuman / Math.max(1, capacityPerAgent);
+    const agentsNeeded = Math.ceil(agentsNeededRaw);
+
+    const activePastCohorts = getActivePastCohorts(state.cohorts, index);
+    const allActiveCohorts = getAllActiveCohorts(state.cohorts, index);
+
+    const hcNominalStart = computeHCNominalStart(state, activePastCohorts);
+    const turnoverBase = hcNominalStart;
+    const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, turnoverBase);
+
+    let turnoverAppliedStart = 0;
+    let turnoverAppliedEnd = 0;
+
+    if (inputs.turnoverTiming === "start_of_month" && turnover > 0) {
+      turnoverAppliedStart = applyTurnoverStartOfMonth(state, turnover, hcNominalStart, activePastCohorts);
+    }
+
+    const hcNominalAfterTurnoverStart = computeHCNominalStart(state, activePastCohorts);
+    const { hcEffective, contributions: cohortContributions } = computeHCEffective(
+      state, allActiveCohorts, index, inputs.rampUpMonths
+    );
+
+    const capacityAvailableTotal = hcEffective * capacityPerAgent;
+    const gapFte = Math.max(0, agentsNeeded - hcEffective);
+    const gap = Math.ceil(gapFte);
+
+    const turnoverFormula = buildTurnoverFormula(
+      inputs, turnoverContext, point.key, turnoverBase, turnover,
+    );
+
+    if (inputs.turnoverTiming === "end_of_month" && turnover > 0) {
+      turnoverAppliedEnd = applyTurnoverEndOfMonth(state, turnover, activePastCohorts);
+    }
+
+    const hcFinal = Math.max(0, state.legacyNominal + allActiveCohorts.reduce((acc, c) => acc + c.count, 0));
+    const risk = computeRisk(gap);
+
+    const { hiresOpened, hiresStarted } = computeHireActions(state.cohorts, index);
+    const { openMonthIndex, openIn, targetImpactIndex, targetImpactLabel } = computeOpenTiming(
+      inputs, index, timeline
+    );
+
+    rows.push({
+      month: point,
+      ...demand,
+      capacityPerAgent,
+      capacityAvailableTotal,
+      agentsNeededRaw,
+      agentsNeeded,
+      hcNominalStart,
+      turnoverAppliedStart,
+      hcNominalAfterTurnoverStart,
+      hcEffectiveBeforeHires: hcEffective,
+      hcAvailableEffective: hcEffective,
+      hcInitial: hcNominalStart,
+      turnover,
+      turnoverFormula,
+      turnoverTiming: inputs.turnoverTiming,
+      turnoverAppliedEnd,
+      hcFinal,
+      gapFte,
+      gap,
+      hire: hiresOpened,
+      hiresOpened,
+      hiresStarted,
+      cohortContributions,
+      openIn,
+      openMonthIndex,
+      targetImpactLabel,
+      targetImpactIndex,
+      risk,
+    });
+  }
 
   const last = rows[rows.length - 1];
-  const hiresYear = rows.reduce((acc, r) => acc + r.hire, 0);
+  const hiresYear = rows.reduce((acc, r) => acc + r.hiresStarted, 0);
   const riskMonths = rows.filter((r) => r.gap > 0).map((r) => r.month.label);
   const criticalOpenMonth = rows.find((r) => r.gap > 0)?.openIn ?? "Sem risco";
 

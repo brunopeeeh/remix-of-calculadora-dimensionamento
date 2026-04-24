@@ -85,6 +85,11 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 222 20% 22%;
     --sidebar-ring: 201 97% 50%;
+
+    --success: 160 84% 45%;
+    --warning: 38 92% 55%;
+    --chart-success: 160 84% 45%;
+    --chart-warning: 38 92% 55%;
   }
 
   * {
@@ -95,6 +100,7 @@
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "tnum" 1, "cv11" 1;
+    transition: background-color 0.2s ease, color 0.15s ease;
   }
 
   h1,
@@ -148,6 +154,11 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+
+  /* KPI value flash animation on update */
+  .kpi-value-flash {
+    animation: kpi-flash 0.4s ease-out;
+  }
 }
 
 @keyframes drift {
@@ -161,4 +172,28 @@
     transform: translateY(14px) scale(1.03);
     opacity: 1;
   }
+}
+
+@keyframes kpi-flash {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.97);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes animate-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-soft {
+  animation: animate-pulse-soft 2s ease-in-out infinite;
 }
