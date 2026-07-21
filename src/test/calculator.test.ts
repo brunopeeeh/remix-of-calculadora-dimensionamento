@@ -286,7 +286,6 @@ describe("turnover strict periodicity and base logic", () => {
     tmaN2: 15,
     rampUpMonths: 3,
     vacationPct: 0,
-    vacationEligiblePct: 0,
     useTenureVacation: false,
     agentsWithTenure: 0,
     breaksPct: 0,
@@ -653,7 +652,7 @@ describe("N1/N2 split and capacity", () => {
       headcountCurrent: 10, productivityBase: 100,
       tmaN1: 20, tmaN2: 45,
       useN1N2Split: false,
-      offchatPct: 0, meetingsPct: 0, vacationPct: 0, vacationEligiblePct: 0,
+      offchatPct: 0, meetingsPct: 0, vacationPct: 0,
     }));
 
     // capacity = 100 * (25/20) * 1 * 1 * 1 = 125
@@ -667,7 +666,7 @@ describe("N1/N2 split and capacity", () => {
       tmaN1: 20, tmaN2: 45,
       mixN1Pct: 80, mixN2Pct: 20,
       useN1N2Split: true,
-      offchatPct: 0, meetingsPct: 0, vacationPct: 0, vacationEligiblePct: 0,
+      offchatPct: 0, meetingsPct: 0, vacationPct: 0,
     }));
 
     // weightedTma = 20*0.8 + 45*0.2 = 16 + 9 = 25
@@ -681,13 +680,13 @@ describe("N1/N2 split and capacity", () => {
       startMonth: 3, endMonth: 3,
       headcountCurrent: 10, productivityBase: 100,
       tmaN1: 25,
-      offchatPct: 0, meetingsPct: 0, vacationPct: 0, vacationEligiblePct: 0,
+      offchatPct: 0, meetingsPct: 0, vacationPct: 0,
     }));
     const withShrink = runPlannerProjection(minimal({
       startMonth: 3, endMonth: 3,
       headcountCurrent: 10, productivityBase: 100,
       tmaN1: 25,
-      offchatPct: 10, meetingsPct: 5, vacationPct: 10, vacationEligiblePct: 70,
+      offchatPct: 10, meetingsPct: 5, vacationPct: 10,
     }));
 
     expect(withShrink.rows[0].capacityPerAgent).toBeLessThan(noShrink.rows[0].capacityPerAgent);

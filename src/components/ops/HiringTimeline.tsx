@@ -1,6 +1,9 @@
+import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Flame,
   Clock,
   Users,
@@ -11,9 +14,8 @@ import {
 } from "lucide-react";
 import { MonthlyProjection } from "@/features/ops-planning/types";
 import { formatInt } from "@/features/ops-planning/format";
+import { Button } from "@/components/ui/button";
 import { KPIWidget } from "./KPIWidget";
-import { PlanNarrative } from "./PlanNarrative";
-import { CapacityDemandChart } from "./CapacityDemandChart";
 import { HiringGantt } from "./HiringGantt";
 import { HiringDetailTable } from "./HiringDetailTable";
 
@@ -52,7 +54,9 @@ const groupByAction = (rows: MonthlyProjection[]): ActionGroup[] => {
 };
 
 export const HiringTimeline = ({ rows, leadTimeMonths, rampUpMonths }: HiringTimelineProps) => {
+  const [showDetail, setShowDetail] = useState(false);
   const criticalRows = rows.filter((row) => row.gap > 0);
+  const actionableRows = rows.filter((row) => row.gap > 0 || row.hiresOpened > 0 || row.hiresStarted > 0);
   const groups = groupByAction(rows);
 
   if (criticalRows.length === 0) {
@@ -123,17 +127,7 @@ export const HiringTimeline = ({ rows, leadTimeMonths, rampUpMonths }: HiringTim
         />
       </section>
 
-      {/* ══ 2. Narrative ══ */}
-      <PlanNarrative
-        rows={rows}
-        leadTimeMonths={leadTimeMonths}
-        rampUpMonths={rampUpMonths}
-      />
-
-      {/* ══ 3. Capacity vs Demand Chart ══ */}
-      <CapacityDemandChart rows={rows} />
-
-      {/* ══ 4. Gantt Chart ══ */}
+      {/* ══ 2. Gantt Chart ══ */}
       <HiringGantt
         rows={rows}
         leadTimeMonths={leadTimeMonths}
@@ -202,8 +196,25 @@ export const HiringTimeline = ({ rows, leadTimeMonths, rampUpMonths }: HiringTim
         </div>
       </section>
 
-      {/* ══ 6. Detail Table ══ */}
-      <HiringDetailTable rows={rows} />
+      {/* ══ 6. Detail Table (opt-in) ══ */}
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowDetail(!showDetail)}
+          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {showDetail ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          Ver detalhamento mês a mês
+        </Button>
+
+        {showDetail && (
+          <div className="mt-2">
+            <HiringDetailTable rows={actionableRows} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

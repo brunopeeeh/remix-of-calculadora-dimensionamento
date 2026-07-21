@@ -40,7 +40,6 @@ const defaultInputs: PlannerInputs = {
   offchatPct: 0,
   meetingsPct: 0,
   vacationPct: 0.05,
-  vacationEligiblePct: 1,
   useTenureVacation: false,
   agentsWithTenure: 0,
   promotionsCount: 0,

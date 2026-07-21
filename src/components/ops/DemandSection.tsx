@@ -18,6 +18,7 @@ interface DemandSectionProps {
   timeline: MonthPoint[];
   contactRateDriftPct: number;
   inferredContactRate: number;
+  isAdvanced?: boolean;
 }
 
 export const DemandSection = ({
@@ -27,6 +28,7 @@ export const DemandSection = ({
   timeline,
   contactRateDriftPct,
   inferredContactRate,
+  isAdvanced = true,
 }: DemandSectionProps) => (
   <AccordionItem value="demand" className="ops-panel border-b-0">
     <AccordionTrigger className="px-4 py-3 hover:no-underline">
@@ -63,43 +65,46 @@ export const DemandSection = ({
           }
         }}
       />
-      <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium">Definir meta por</p>
-          <TooltipInfo content="Escolha inserir o valor absoluto da meta ou a % de crescimento sobre a base atual." />
+      {isAdvanced && (
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">Definir meta por</p>
+            <TooltipInfo content="Escolha inserir o valor absoluto da meta ou a % de crescimento sobre a base atual." />
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+            <SimpleNumberField
+              label={inputs.targetClientsGrowthPct > 0 ? `% crescimento (${formatInt(inputs.currentClients)} → ${formatInt(Math.round(inputs.currentClients * (1 + inputs.targetClientsGrowthPct / 100)))})` : "% crescimento"}
+              description="Percentual de crescimento sobre a base atual"
+              tooltip="Meta = Clientes atuais × (1 + % / 100)"
+              value={inputs.targetClientsGrowthPct}
+              min={0}
+              formatType="decimal"
+              decimalDigits={1}
+              onChange={(v) => {
+                patch("targetClientsGrowthPct", v);
+                if (inputs.currentClients > 0) {
+                  patch("targetClientsQ4", Math.round(inputs.currentClients * (1 + v / 100)));
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (inputs.currentClients > 0 && inputs.targetClientsQ4 > 0) {
+                  const pct = Math.round(((inputs.targetClientsQ4 - inputs.currentClients) / inputs.currentClients) * 10000) / 100;
+                  patch("targetClientsGrowthPct", pct);
+                }
+              }}
+              className="h-8 shrink-0 text-xs"
+            >
+              Sincronizar
+            </Button>
+          </div>
         </div>
-        <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
-          <SimpleNumberField
-            label={inputs.targetClientsGrowthPct > 0 ? `% crescimento (${formatInt(inputs.currentClients)} → ${formatInt(Math.round(inputs.currentClients * (1 + inputs.targetClientsGrowthPct / 100)))})` : "% crescimento"}
-            description="Percentual de crescimento sobre a base atual"
-            tooltip="Meta = Clientes atuais × (1 + % / 100)"
-            value={inputs.targetClientsGrowthPct}
-            min={0}
-            formatType="decimal"
-            decimalDigits={1}
-            onChange={(v) => {
-              patch("targetClientsGrowthPct", v);
-              if (inputs.currentClients > 0) {
-                patch("targetClientsQ4", Math.round(inputs.currentClients * (1 + v / 100)));
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (inputs.currentClients > 0 && inputs.targetClientsQ4 > 0) {
-                const pct = Math.round(((inputs.targetClientsQ4 - inputs.currentClients) / inputs.currentClients) * 10000) / 100;
-                patch("targetClientsGrowthPct", pct);
-              }
-            }}
-            className="h-8 shrink-0 text-xs"
-          >
-            Sincronizar
-          </Button>
-        </div>
-      </div>
+      )}
+
       <SimpleNumberField
         label="Volume atual"
         description="Referência para calibrar premissas"
@@ -135,97 +140,101 @@ export const DemandSection = ({
         </p>
       ) : null}
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium">Modo de crescimento</p>
-          <TooltipInfo content="Linear aplica trajetória contínua até a meta; manual permite ajustar mês a mês." />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" size="sm" variant={inputs.growthMode === "linear" ? "default" : "outline"} onClick={() => patch("growthMode", "linear")}>Linear</Button>
-          <Button type="button" size="sm" variant={inputs.growthMode === "manual" ? "default" : "outline"} onClick={() => patch("growthMode", "manual")}>Manual por mês</Button>
-        </div>
-      </div>
-
-      {inputs.growthMode === "manual" ? (
-        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-          <p className="text-[11px] text-muted-foreground">Crescimento mensal (%)</p>
-          {timeline.slice(1).map((point) => {
-            const currentValue = inputs.manualGrowthByMonth?.[point.key] ?? 0;
-            const displayValue = Number.isNaN(currentValue) ? 0 : currentValue;
-            return (
-              <div key={point.key} className="grid grid-cols-[72px_1fr] items-center gap-2">
-                <span className="mono-numbers text-xs text-muted-foreground">{point.label}</span>
-                <Input
-                  type="number"
-                  value={displayValue}
-                  onFocus={(e) => e.currentTarget.select()}
-                  onChange={(e) => {
-                    const raw = Number(e.target.value);
-                    const safeValue = Number.isNaN(raw) ? 0 : raw;
-                    setInputs((prev) => ({
-                      ...prev,
-                      manualGrowthByMonth: {
-                        ...(prev.manualGrowthByMonth || {}),
-                        [point.key]: safeValue,
-                      },
-                    }));
-                  }}
-                  className="mono-numbers h-7"
-                />
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium">Sazonalidade de Volume (%)</p>
-          <TooltipInfo content="Ajuste manual para prever picos de volume que não dependem do crescimento da base de clientes." />
-        </div>
-        <p className="text-[11px] text-muted-foreground mb-2">Variação extra sobre o volume bruto do mês.</p>
-        {timeline.slice(1).map((point) => {
-          const currentValue = inputs.manualSeasonalityByMonth?.[point.key] ?? 0;
-          const numericValue = Number.isNaN(currentValue) ? 0 : currentValue;
-          const displayValue = numericValue === 0 ? "" : String(numericValue);
-          const hasValue = numericValue !== 0;
-          return (
-            <div key={point.key} className="grid grid-cols-[72px_1fr] items-center gap-2 mb-2">
-              <span className={`mono-numbers text-xs ${hasValue ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                {point.label}
-              </span>
-              <Input
-                type="number"
-                value={displayValue}
-                placeholder="0"
-                onChange={(e) => {
-                  const raw = Number(e.target.value);
-                  const safeValue = Number.isNaN(raw) ? 0 : raw;
-                  setInputs((prev) => ({
-                    ...prev,
-                    manualSeasonalityByMonth: {
-                      ...(prev.manualSeasonalityByMonth || {}),
-                      [point.key]: safeValue,
-                    },
-                  }));
-                }}
-                onBlur={(e) => {
-                  if (e.target.value === "") {
-                    setInputs((prev) => ({
-                      ...prev,
-                      manualSeasonalityByMonth: {
-                        ...(prev.manualSeasonalityByMonth || {}),
-                        [point.key]: 0,
-                      },
-                    }));
-                  }
-                }}
-                className={`mono-numbers h-7 ${hasValue ? "border-primary/50 bg-primary/5" : ""}`}
-              />
+      {isAdvanced && (
+        <>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium">Modo de crescimento</p>
+              <TooltipInfo content="Linear aplica trajetória contínua até a meta; manual permite ajustar mês a mês." />
             </div>
-          );
-        })}
-      </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" size="sm" variant={inputs.growthMode === "linear" ? "default" : "outline"} onClick={() => patch("growthMode", "linear")}>Linear</Button>
+              <Button type="button" size="sm" variant={inputs.growthMode === "manual" ? "default" : "outline"} onClick={() => patch("growthMode", "manual")}>Manual por mês</Button>
+            </div>
+          </div>
+
+          {inputs.growthMode === "manual" ? (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <p className="text-[11px] text-muted-foreground">Crescimento mensal (%)</p>
+              {timeline.slice(1).map((point) => {
+                const currentValue = inputs.manualGrowthByMonth?.[point.key] ?? 0;
+                const displayValue = Number.isNaN(currentValue) ? 0 : currentValue;
+                return (
+                  <div key={point.key} className="grid grid-cols-[72px_1fr] items-center gap-2">
+                    <span className="mono-numbers text-xs text-muted-foreground">{point.label}</span>
+                    <Input
+                      type="number"
+                      value={displayValue}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => {
+                        const raw = Number(e.target.value);
+                        const safeValue = Number.isNaN(raw) ? 0 : raw;
+                        setInputs((prev) => ({
+                          ...prev,
+                          manualGrowthByMonth: {
+                            ...(prev.manualGrowthByMonth || {}),
+                            [point.key]: safeValue,
+                          },
+                        }));
+                      }}
+                      className="mono-numbers h-7"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium">Sazonalidade de Volume (%)</p>
+              <TooltipInfo content="Ajuste manual para prever picos de volume que não dependem do crescimento da base de clientes." />
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-2">Variação extra sobre o volume bruto do mês.</p>
+            {timeline.slice(1).map((point) => {
+              const currentValue = inputs.manualSeasonalityByMonth?.[point.key] ?? 0;
+              const numericValue = Number.isNaN(currentValue) ? 0 : currentValue;
+              const displayValue = numericValue === 0 ? "" : String(numericValue);
+              const hasValue = numericValue !== 0;
+              return (
+                <div key={point.key} className="grid grid-cols-[72px_1fr] items-center gap-2 mb-2">
+                  <span className={`mono-numbers text-xs ${hasValue ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                    {point.label}
+                  </span>
+                  <Input
+                    type="number"
+                    value={displayValue}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const raw = Number(e.target.value);
+                      const safeValue = Number.isNaN(raw) ? 0 : raw;
+                      setInputs((prev) => ({
+                        ...prev,
+                        manualSeasonalityByMonth: {
+                          ...(prev.manualSeasonalityByMonth || {}),
+                          [point.key]: safeValue,
+                        },
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value === "") {
+                        setInputs((prev) => ({
+                          ...prev,
+                          manualSeasonalityByMonth: {
+                            ...(prev.manualSeasonalityByMonth || {}),
+                            [point.key]: 0,
+                          },
+                        }));
+                      }
+                    }}
+                    className={`mono-numbers h-7 ${hasValue ? "border-primary/50 bg-primary/5" : ""}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </AccordionContent>
   </AccordionItem>
 );

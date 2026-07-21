@@ -40,7 +40,6 @@ const simulationInputs: PlannerInputs = {
   offchatPct: 0,
   meetingsPct: 0,
   vacationPct: 0,
-  vacationEligiblePct: 100,
   useTenureVacation: false,
   agentsWithTenure: 0,
   promotionsCount: 0,

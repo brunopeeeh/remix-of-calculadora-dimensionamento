@@ -16,9 +16,12 @@ export const computeTenureVacationPct = (agentsWithTenure: number, totalHeadcoun
   // C5: máximo de agentes de férias simultâneos proporcional ao headcount (5%, mín. 1).
   // Antes era fixo em 1, o que distorcia silenciosamente para times grandes.
   const maxConcurrentAgents = Math.max(1, Math.floor(totalHeadcount * 0.05));
-  const periodsPerYear = agentsWithTenure * 2;
-  const periodsPerMonth = periodsPerYear / 12;
-  const actualAgentsOnVacation = Math.min(periodsPerMonth, maxConcurrentAgents);
+  // Cada agente elegível tira 2 períodos de 15 dias/ano = 30 dias/ano.
+  // Média de agentes simultaneamente de férias = dias-agente/ano ÷ 365
+  // (independe de os dois períodos caírem no mesmo ano-calendário ou não).
+  const vacationDaysPerAgentPerYear = 30;
+  const avgConcurrentAgents = (agentsWithTenure * vacationDaysPerAgentPerYear) / 365;
+  const actualAgentsOnVacation = Math.min(avgConcurrentAgents, maxConcurrentAgents);
   return actualAgentsOnVacation / totalHeadcount;
 };
 
@@ -66,7 +69,7 @@ export const computeCapacityPerAgent = (
 
   const complexityFactor = clamp(BASE_WEIGHTED_TMA / weightedTma, 0.7, 1.4);
 
-  let vacationImpactPct = (inputs.vacationPct / 100) * (inputs.vacationEligiblePct / 100);
+  let vacationImpactPct = inputs.vacationPct / 100;
 
   if (inputs.useTenureVacation && inputs.agentsWithTenure > 0) {
     const tenureVacationPct = computeTenureVacationPct(inputs.agentsWithTenure, inputs.headcountCurrent);

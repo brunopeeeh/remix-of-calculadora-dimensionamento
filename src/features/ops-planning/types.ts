@@ -48,7 +48,6 @@ export interface PlannerInputs {
   offchatPct: number;
   meetingsPct: number;
   vacationPct: number;
-  vacationEligiblePct: number;
   useTenureVacation: boolean;
   agentsWithTenure: number;
   /** Total de promoções durante o período. Reduz mixN1Pct e aumenta mixN2Pct ao longo da projeção (N1 → N2). */

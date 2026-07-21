@@ -55,7 +55,7 @@ export const ChartsSection = ({ rows, inputs, capacityPerAgent }: ChartsSectionP
         const tenureVacationPct = computeTenureVacationPct(inputs.agentsWithTenure, inputs.headcountCurrent);
         return inputs.productivityBase * tenureVacationPct;
       }
-      return inputs.productivityBase * ((inputs.vacationPct / 100) * (inputs.vacationEligiblePct / 100));
+      return inputs.productivityBase * (inputs.vacationPct / 100);
     })(),
   ];
   const totalLoss = shrinkageLosses.reduce((a, b) => a + b, 0);
@@ -132,17 +132,27 @@ export const ChartsSection = ({ rows, inputs, capacityPerAgent }: ChartsSectionP
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Evolução de headcount" subtitle={`Agentes necessários, HC efetivo (rampa ${inputs.rampUpMonths} meses) e gap mensal`}>
+      <ChartCard title="Evolução de headcount" subtitle={`Agentes necessários vs HC efetivo (rampa ${inputs.rampUpMonths} meses) — zona vermelha indica gap`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartRows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gapFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--chart-danger))" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="hsl(var(--chart-danger))" stopOpacity={0.05} />
+              </linearGradient>
+              <linearGradient id="capFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--chart-success))" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="hsl(var(--chart-success))" stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
             <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
             <Tooltip formatter={(v: number) => formatInt(v)} />
             <Legend wrapperStyle={{ fontSize: "11px" }} />
-            <Bar dataKey="agentesNecessarios" fill="hsl(var(--chart-info))" radius={[4, 4, 0, 0]} name="Agentes necessários" />
-            <Bar dataKey="hcDisponivel" fill="hsl(var(--chart-success))" radius={[4, 4, 0, 0]} name="HC efetivo" />
-            <Line type="monotone" dataKey="gap" stroke="hsl(var(--chart-danger))" strokeWidth={2} dot={false} name="Gap" />
+            <Area type="monotone" dataKey="hcDisponivel" stroke="hsl(var(--chart-success))" fill="url(#capFill)" strokeWidth={2} name="HC efetivo" />
+            <Line type="monotone" dataKey="agentesNecessarios" stroke="hsl(var(--chart-danger))" strokeWidth={2.5} dot={{ r: 3, fill: "hsl(var(--chart-danger))" }} name="Agentes necessários" />
+            <Area type="monotone" dataKey="gap" stroke="none" fill="url(#gapFill)" name="Gap" />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartCard>

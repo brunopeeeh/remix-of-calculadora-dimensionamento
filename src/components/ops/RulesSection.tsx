@@ -10,9 +10,10 @@ import { PlannerInputs, HiringMode } from "@/features/ops-planning/types";
 interface RulesSectionProps {
   inputs: PlannerInputs;
   patch: <K extends keyof PlannerInputs>(key: K, value: PlannerInputs[K]) => void;
+  isAdvanced?: boolean;
 }
 
-export const RulesSection = ({ inputs, patch }: RulesSectionProps) => (
+export const RulesSection = ({ inputs, patch, isAdvanced = true }: RulesSectionProps) => (
   <AccordionItem value="rules" className="ops-panel border-b-0">
     <AccordionTrigger className="px-4 py-3 hover:no-underline">
       <div className="text-left">
@@ -21,26 +22,28 @@ export const RulesSection = ({ inputs, patch }: RulesSectionProps) => (
       </div>
     </AccordionTrigger>
     <AccordionContent className="px-4 space-y-4">
-      <div className="space-y-2">
-        <p className="text-xs font-medium">Estratégia de contratação</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(["antecipado", "gap"] as HiringMode[]).map((m) => (
-            <Button
-              key={m} type="button" size="sm"
-              variant={inputs.hiringMode === m ? "default" : "outline"}
-              onClick={() => patch("hiringMode", m)}
-              className="capitalize"
-            >
-              {m === "antecipado" ? "Antecipado" : "Gap (reativo)"}
-            </Button>
-          ))}
+      {isAdvanced && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">Estratégia de contratação</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["antecipado", "gap"] as HiringMode[]).map((m) => (
+              <Button
+                key={m} type="button" size="sm"
+                variant={inputs.hiringMode === m ? "default" : "outline"}
+                onClick={() => patch("hiringMode", m)}
+                className="capitalize"
+              >
+                {m === "antecipado" ? "Antecipado" : "Gap (reativo)"}
+              </Button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {inputs.hiringMode === "antecipado"
+              ? "Contrata antes do gap acontecer, considerando lead time e ramp-up para maturação."
+              : "Contrata apenas quando o gap aparece, sem antecipação de ramp-up."}
+          </p>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          {inputs.hiringMode === "antecipado"
-            ? "Contrata antes do gap acontecer, considerando lead time e ramp-up para maturação."
-            : "Contrata apenas quando o gap aparece, sem antecipação de ramp-up."}
-        </p>
-      </div>
+      )}
       <SimpleNumberField
         label="Meses de antecedência (lead time)"
         description="Quantos meses entre abrir a vaga e o contratado iniciar"

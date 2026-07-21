@@ -35,7 +35,7 @@ export const HiringDetailTable = ({ rows }: HiringDetailTableProps) => {
       <header className="mb-3">
         <h3 className="heading-tight text-sm font-semibold">Detalhamento mensal do plano</h3>
         <p className="text-xs text-muted-foreground">
-          Visão mês a mês de demanda, capacidade, gap e ações de contratação
+          Apenas meses com gap ou ação de contratação — ledger completo na aba Detalhes
         </p>
       </header>
 

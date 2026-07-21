@@ -48,7 +48,6 @@ const baseInputs = (): PlannerInputs => ({
   offchatPct: 0,
   meetingsPct: 0,
   vacationPct: 0,
-  vacationEligiblePct: 0,
   useTenureVacation: false,
   agentsWithTenure: 0,
   promotionsCount: 0,
@@ -112,12 +111,12 @@ describe("KPI: Capacidade por agente (computeCapacityPerAgent)", () => {
   });
 
   /**
-   * vacationPct = 20, vacationEligiblePct = 50
-   * vacationImpactPct = (20/100) * (50/100) = 0.1
+   * vacationPct = 10
+   * vacationImpactPct = 10/100 = 0.1
    * raw = 200 * 1.0 * 1 * 1 * (1 - 0.1) = 180
    */
-  it("SIMULAÇÃO 5 — férias reduz capacidade proporcionalmente aos elegíveis", () => {
-    const inputs = { ...baseInputs(), vacationPct: 20, vacationEligiblePct: 50 };
+  it("SIMULAÇÃO 5 — férias reduz capacidade proporcionalmente ao % informado", () => {
+    const inputs = { ...baseInputs(), vacationPct: 10 };
     const cap = computeCapacityPerAgent(inputs);
     expect(cap).toBeCloseTo(180, 1);
   });
@@ -146,10 +145,11 @@ describe("KPI: Capacidade por agente (computeCapacityPerAgent)", () => {
 
   /**
    * useTenureVacation=true, agentsWithTenure=6, headcountCurrent=20
-   * periodsPerYear = 6 * 2 = 12 → periodsPerMonth = 12/12 = 1
-   * actualAgentsOnVacation = min(1, 1) = 1
-   * tenureVacationPct = 1/20 = 0.05 (5%)
-   * raw = 200 * 1.0 * 1 * 1 * (1 - 0.05) = 190
+   * 6 agentes x 2 períodos de 15 dias/ano = 180 dias-agente/ano
+   * avgConcurrentAgents = 180 / 365 ≈ 0.4932
+   * maxConcurrentAgents = max(1, floor(20*0.05)) = 1 → não satura
+   * tenureVacationPct = 0.4932 / 20 ≈ 0.02466 (2.47%)
+   * raw = 200 * 1.0 * 1 * 1 * (1 - 0.02466) ≈ 195.07
    */
   it("SIMULAÇÃO 7 — modo tenure vacation: cálculo correto de impacto", () => {
     const inputs = {
@@ -158,11 +158,11 @@ describe("KPI: Capacidade por agente (computeCapacityPerAgent)", () => {
       agentsWithTenure: 6,
       headcountCurrent: 20,
     };
-    const tenurePct = computeTenureVacationPct(6, 20); // = 0.05
-    expect(tenurePct).toBeCloseTo(0.05, 4);
+    const tenurePct = computeTenureVacationPct(6, 20);
+    expect(tenurePct).toBeCloseTo(0.02466, 4);
 
     const cap = computeCapacityPerAgent(inputs);
-    expect(cap).toBeCloseTo(200 * (1 - 0.05), 1); // = 190
+    expect(cap).toBeCloseTo(200 * (1 - tenurePct), 1);
   });
 
   it("SIMULAÇÃO 8 — TMA = 0 retorna 0 (sem divisão por zero)", () => {
