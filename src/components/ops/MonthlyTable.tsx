@@ -103,11 +103,12 @@ export const MonthlyTable = ({ rows }: MonthlyTableProps) => {
                     isGapCritical && "bg-destructive/5",
                   )}
                 >
-                  <td className={cn(
-                    "whitespace-nowrap px-3 py-2 font-medium sticky left-0 z-10",
-                    isGapCritical ? "bg-destructive/5" : bgClass,
-                  )}>
-                    {row.month.label}
+                  <td className="whitespace-nowrap px-3 py-2 font-medium sticky left-0 z-10 bg-card">
+                    <div className={cn(
+                      "absolute inset-0 pointer-events-none",
+                      isGapCritical ? "bg-destructive/5" : bgClass
+                    )} />
+                    <span className="relative z-10">{row.month.label}</span>
                   </td>
                   <td className="mono-numbers px-3 py-2">{formatInt(row.clientsBase)}</td>
                   <td className="mono-numbers px-3 py-2">{formatDecimal(row.contactRate, 2)}</td>

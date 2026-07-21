@@ -1,4 +1,10 @@
-import { PlannerInputs, ScenarioKey } from "./types";
+import { PlannerInputs, RookieRampFactors, ScenarioKey } from "./types";
+
+export const DEFAULT_ROOKIE_RAMP_FACTORS: RookieRampFactors = {
+  month1: 0.33,
+  month2: 0.66,
+  month3: 1.0,
+};
 
 export const BASE_YEAR = 2026;
 
@@ -37,6 +43,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     extraAutomationPct: 2,
 
     headcountCurrent: 12,
+    headcountPleno: 12,
+    headcountNovo: 0,
+    rookieRampFactors: { ...DEFAULT_ROOKIE_RAMP_FACTORS },
     productivityBase: 900,
     rampUpMonths: 3,
     tmaN1: 20,
@@ -81,6 +90,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     extraAutomationPct: 4,
 
     headcountCurrent: 12,
+    headcountPleno: 12,
+    headcountNovo: 0,
+    rookieRampFactors: { ...DEFAULT_ROOKIE_RAMP_FACTORS },
     productivityBase: 980,
     rampUpMonths: 3,
     tmaN1: 18,
@@ -125,6 +137,9 @@ export const SCENARIO_PRESETS: Record<ScenarioKey, PlannerInputs> = {
     extraAutomationPct: 1,
 
     headcountCurrent: 12,
+    headcountPleno: 12,
+    headcountNovo: 0,
+    rookieRampFactors: { ...DEFAULT_ROOKIE_RAMP_FACTORS },
     productivityBase: 830,
     rampUpMonths: 3,
     tmaN1: 22,
@@ -172,6 +187,9 @@ export const EMPTY_PLANNER_INPUTS: PlannerInputs = {
   extraAutomationPct: 0,
 
   headcountCurrent: 0,
+  headcountPleno: 0,
+  headcountNovo: 0,
+  rookieRampFactors: { ...DEFAULT_ROOKIE_RAMP_FACTORS },
   productivityBase: 0,
   rampUpMonths: 3,
   tmaN1: 20,

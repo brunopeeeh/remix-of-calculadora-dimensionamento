@@ -377,21 +377,23 @@ describe("KPI: Turnover por mês", () => {
    * trimestral: trigger automático a cada 3 meses
    * timeline 6 meses → triggers em index 0 e 3
    */
-  it("SIMULAÇÃO 22 — trimestral auto: triggers apenas nos meses corretos", () => {
+  it("SIMULAÇÃO 22 — trimestral auto: aplica a taxa rateada em todos os meses", () => {
     const inputs = { ...baseInputs(), turnoverValue: 3, turnoverPeriod: "trimestral" as const, turnoverInputMode: "absoluto" as const };
     const proj = runPlannerProjection(inputs);
 
-    // Índice 0 e 3 devem ter turnover, demais = 0
-    expect(proj.rows[0].turnover).toBeCloseTo(1, 3); // 3/3 = 1
-    expect(proj.rows[1].turnover).toBe(0);
-    expect(proj.rows[2].turnover).toBe(0);
+    // Com o cálculo correto, a taxa de 1 por mês é aplicada em todos os meses
+    expect(proj.rows[0].turnover).toBeCloseTo(1, 3);
+    expect(proj.rows[1].turnover).toBeCloseTo(1, 3);
+    expect(proj.rows[2].turnover).toBeCloseTo(1, 3);
     expect(proj.rows[3].turnover).toBeCloseTo(1, 3);
-    expect(proj.rows[4].turnover).toBe(0);
-    expect(proj.rows[5].turnover).toBe(0);
+    expect(proj.rows[4].turnover).toBeCloseTo(1, 3);
+    expect(proj.rows[5].turnover).toBeCloseTo(1, 3);
   });
 
   /**
    * Meses fixos obrigatórios: user escolhe meses 1 e 4
+   * C4: com 2 meses ativos e turnoverValue=4, cada mês recebe 4/2=2.
+   * O total distribuído continua sendo 4 — igual ao valor informado.
    */
   it("SIMULAÇÃO 23 — turnoverMonths manuais: respeita lista do usuário", () => {
     const key1 = timeline[0].key;
@@ -405,12 +407,17 @@ describe("KPI: Turnover por mês", () => {
     };
     const proj = runPlannerProjection(inputs);
 
-    expect(proj.rows[0].turnover).toBeCloseTo(4, 3);
+    // C4: turnoverValue distribuído igualmente pelos 2 meses ativos → 2 cada
+    expect(proj.rows[0].turnover).toBeCloseTo(2, 3);
     expect(proj.rows[1].turnover).toBe(0);
     expect(proj.rows[2].turnover).toBe(0);
-    expect(proj.rows[3].turnover).toBeCloseTo(4, 3);
+    expect(proj.rows[3].turnover).toBeCloseTo(2, 3);
     expect(proj.rows[4].turnover).toBe(0);
     expect(proj.rows[5].turnover).toBe(0);
+
+    // Total nos meses ativos deve ser igual a turnoverValue
+    const totalActive = proj.rows[0].turnover + proj.rows[3].turnover;
+    expect(totalActive).toBeCloseTo(4, 3);
   });
 
   /**
@@ -569,6 +576,19 @@ describe("KPI: Campos do summary (ProjectionSummary)", () => {
     const inputs = { ...baseInputs(), headcountCurrent: 100 };
     const proj = runPlannerProjection(inputs);
     expect(proj.summary.criticalOpenMonth).toBe("Sem risco");
+  });
+
+  /**
+   * hcFinalQ4 reflete o hcFinal do último mês e totalTurnoverYear soma o turnover de todos os meses
+   */
+  it("SIMULAÇÃO 36b — hcFinalQ4 e totalTurnoverYear são calculados corretamente no summary", () => {
+    const inputs = baseInputs();
+    const proj = runPlannerProjection(inputs);
+    const last = proj.rows[proj.rows.length - 1];
+    const expectedTurnover = Math.round(proj.rows.reduce((acc, r) => acc + r.turnover, 0));
+
+    expect(proj.summary.hcFinalQ4).toBe(last.hcFinal);
+    expect(proj.summary.totalTurnoverYear).toBe(expectedTurnover);
   });
 });
 

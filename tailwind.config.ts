@@ -19,16 +19,39 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        info: "hsl(var(--info))",
-        success: "hsl(var(--success))",
-        warning: "hsl(var(--warning))",
-        danger: "hsl(var(--danger))",
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        danger: {
+          DEFAULT: "hsl(var(--danger))",
+          foreground: "hsl(var(--danger-foreground))",
+        },
         chart: {
           info: "hsl(var(--chart-info))",
           success: "hsl(var(--chart-success))",
           warning: "hsl(var(--chart-warning))",
           danger: "hsl(var(--chart-danger))",
           neutral: "hsl(var(--chart-neutral))",
+          accent: "hsl(var(--chart-accent))",
+        },
+        glass: {
+          bg: "hsl(var(--glass-bg))",
+          border: "hsl(var(--glass-border))",
+        },
+        glow: {
+          primary: "hsl(var(--glow-primary))",
+          success: "hsl(var(--glow-success))",
+          warning: "hsl(var(--glow-warning))",
+          danger: "hsl(var(--glow-danger))",
         },
         primary: {
           DEFAULT: "hsl(var(--primary))",
@@ -70,8 +93,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        tight: ["Inter Tight", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Poppins", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Poppins", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,20 +103,12 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
         "pulse-soft": {
           "0%, 100%": { opacity: "0.5", transform: "scale(1)" },
@@ -103,12 +118,22 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "slide-up-fade": {
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { boxShadow: "0 0 20px -6px hsl(var(--glow-danger))" },
+          "50%": { boxShadow: "0 0 32px -2px hsl(var(--glow-danger))" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-soft": "pulse-soft 1.8s ease-in-out infinite",
         "value-rise": "value-rise 0.2s ease-out",
+        "slide-up-fade": "slide-up-fade 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "glow-pulse": "glow-pulse 2.5s ease-in-out infinite",
       },
     },
   },

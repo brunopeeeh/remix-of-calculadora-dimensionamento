@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { TooltipInfo } from "./TooltipInfo";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ import {
 import { useNumberFormatting } from "@/features/ops-planning/number-formatting-context";
 
 interface SimpleNumberFieldProps {
+  id?: string;
+  name?: string;
   label: string;
   description: string;
   tooltip: string;
@@ -25,6 +27,8 @@ interface SimpleNumberFieldProps {
 }
 
 export const SimpleNumberField = ({
+  id,
+  name,
   label,
   description,
   tooltip,
@@ -37,6 +41,9 @@ export const SimpleNumberField = ({
   decimalDigits,
   replaceValueOnFocus = true,
 }: SimpleNumberFieldProps) => {
+  const autoId = useId();
+  const inputId = id || autoId;
+  const inputName = name || inputId;
   const formatDisplay = useNumberFormatting();
   const resolvedDecimalDigits = decimalDigits ?? (formatType === "decimal" ? 2 : 0);
   const toDisplayValue = (next: number) =>
@@ -90,10 +97,12 @@ export const SimpleNumberField = ({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <label className="text-xs font-medium">{label}</label>
+        <label htmlFor={inputId} className="text-xs font-medium">{label}</label>
         <TooltipInfo content={tooltip} />
       </div>
       <Input
+        id={inputId}
+        name={inputName}
         type="text"
         inputMode={formatType === "decimal" ? "decimal" : "numeric"}
         value={draftValue}

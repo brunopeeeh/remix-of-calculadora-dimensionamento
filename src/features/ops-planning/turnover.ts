@@ -18,14 +18,7 @@ export const getAutoTurnoverMonths = (
   period: PlannerInputs["turnoverPeriod"],
   timeline: MonthPoint[]
 ): string[] => {
-  if (timeline.length === 0) return [];
-  const step = getTurnoverPeriodMonths(period);
-  const result: string[] = [];
-  // Gatilho ocorre a cada `step` meses a partir do primeiro mês (timeline[0])
-  for (let i = 0; i < timeline.length; i += step) {
-    result.push(timeline[i].key);
-  }
-  return result;
+  return timeline.map(m => m.key);
 };
 
 const formatTurnoverMode = (mode: PlannerInputs["turnoverInputMode"]): string => {
@@ -75,14 +68,17 @@ export const resolveTurnoverForMonth = (
 ): number => {
   if (inputs.turnoverValue <= 0 || !ctx.activeTimelineKeySet.has(monthKey) || ctx.activeCount === 0) return 0;
 
-  const monthlyRate = inputs.turnoverValue / ctx.periodMonths;
-  const clampedRate = Math.min(monthlyRate, 50);
+  // C4: quando o usuário seleciona meses manualmente, redistribuir turnoverValue
+  // pelos meses ativos (activeCount), não pelo período fixo (periodMonths).
+  // Isso garante que o total de turnover no período == turnoverValue informado.
+  const denominator = inputs.turnoverMonths.length > 0 ? ctx.activeCount : ctx.periodMonths;
+  const monthlyRate = inputs.turnoverValue / denominator;
 
   if (inputs.turnoverInputMode === "percentual") {
-    return hcBase * (clampedRate / 100);
+    return hcBase * (monthlyRate / 100);
   }
 
-  return clampedRate;
+  return monthlyRate;
 };
 
 export const buildTurnoverFormula = (
@@ -102,13 +98,14 @@ export const buildTurnoverFormula = (
   if (ctx.activeCount === 0) return `${prefix} | sem meses ativos = 0`;
   if (!isActive) return `${prefix} | mês inativo = 0`;
 
-  const monthlyRate = inputs.turnoverValue / ctx.periodMonths;
-  const clampedRate = Math.min(monthlyRate, 50);
+  // C4: mesmo denominador corrigido para o texto da fórmula
+  const denominator = inputs.turnoverMonths.length > 0 ? ctx.activeCount : ctx.periodMonths;
+  const monthlyRate = inputs.turnoverValue / denominator;
 
   if (inputs.turnoverInputMode === "percentual") {
-    return `${prefix} | Base: HC (${fmt(hcBase)}) | ${fmt(clampedRate)}% mensal = ${fmt(turnover)}`;
+    return `${prefix} | Base: HC (${fmt(hcBase)}) | ${fmt(monthlyRate)}% mensal = ${fmt(turnover)}`;
   }
 
-  return `${prefix} | ${fmt(clampedRate)} abs/mês = ${fmt(turnover)}`;
+  return `${prefix} | ${fmt(monthlyRate)} abs/mês = ${fmt(turnover)}`;
 };
 

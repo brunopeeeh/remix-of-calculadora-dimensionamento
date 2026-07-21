@@ -162,7 +162,7 @@ export const ChartsSection = ({ rows, inputs, capacityPerAgent }: ChartsSectionP
       </ChartCard>
 
       <ChartCard
-        title="Capacity x shrinkage"
+        title="Capacidade × perdas"
         subtitle={`Perdas totais: −${formatDecimal(totalLoss, 0)} (${inputs.productivityBase > 0 ? formatDecimal((totalLoss / inputs.productivityBase) * 100, 1) : "0"}% da prod. nominal)`}
       >
         <ResponsiveContainer width="100%" height="100%">

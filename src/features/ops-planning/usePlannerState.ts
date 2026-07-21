@@ -1,15 +1,40 @@
 import { useState, useEffect } from "react";
 import { clamp } from "./format";
-import { EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "./scenarios";
+import { DEFAULT_ROOKIE_RAMP_FACTORS, EMPTY_PLANNER_INPUTS, SCENARIO_PRESETS } from "./scenarios";
 import { PlannerInputs, ScenarioKey } from "./types";
 
 const STORAGE_KEY = "ops-planner-state-v1";
+
+/** Backfill any missing rookie-composition fields for data saved before this feature */
+const migrateInputs = (raw: Partial<PlannerInputs>): PlannerInputs => {
+  const base = SCENARIO_PRESETS.base;
+  const migrated = { ...base, ...raw } as PlannerInputs;
+
+  // Ensure objects are never undefined
+  if (!migrated.rookieRampFactors || typeof migrated.rookieRampFactors !== "object") {
+    migrated.rookieRampFactors = { ...DEFAULT_ROOKIE_RAMP_FACTORS };
+  }
+  if (migrated.headcountPleno == null) {
+    migrated.headcountPleno = migrated.headcountCurrent ?? base.headcountPleno;
+  }
+  if (migrated.headcountNovo == null) {
+    migrated.headcountNovo = 0;
+  }
+  return migrated;
+};
 
 const cloneInputs = (source: PlannerInputs): PlannerInputs => ({
   ...source,
   manualGrowthByMonth: { ...source.manualGrowthByMonth },
   manualSeasonalityByMonth: { ...source.manualSeasonalityByMonth },
   turnoverMonths: [...source.turnoverMonths],
+  rookieRampFactors: { ...(source.rookieRampFactors ?? DEFAULT_ROOKIE_RAMP_FACTORS) },
+});
+
+/** Derive total headcount from pleno + novo */
+const syncHeadcountCurrent = (inputs: PlannerInputs): PlannerInputs => ({
+  ...inputs,
+  headcountCurrent: inputs.headcountPleno + (inputs.headcountNovo ?? 0),
 });
 
 interface PersistedState {
@@ -25,6 +50,8 @@ const loadFromStorage = (): PersistedState | null => {
     const parsed = JSON.parse(raw) as PersistedState;
     // Validate minimally
     if (!parsed.inputs || !parsed.scenario) return null;
+    // Migrate legacy data to include rookie fields
+    parsed.inputs = migrateInputs(parsed.inputs);
     return parsed;
   } catch {
     return null;
@@ -58,10 +85,20 @@ export const usePlannerState = () => {
 
   const patch = <K extends keyof PlannerInputs>(key: K | ((prev: PlannerInputs) => Partial<PlannerInputs>), value?: PlannerInputs[K]) => {
     setInputs((prev) => {
+      let next: PlannerInputs;
       if (typeof key === "function") {
-        return { ...prev, ...key(prev) };
+        next = { ...prev, ...key(prev) };
+      } else {
+        next = { ...prev, [key]: value };
       }
-      return { ...prev, [key]: value };
+      // Auto-sync headcountCurrent whenever composition changes
+      if (
+        (typeof key === "string" && (key === "headcountPleno" || key === "headcountNovo")) ||
+        typeof key === "function"
+      ) {
+        return syncHeadcountCurrent(next);
+      }
+      return next;
     });
   };
 

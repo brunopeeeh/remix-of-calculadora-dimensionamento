@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { TooltipInfo } from "./TooltipInfo";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ import {
 import { useNumberFormatting } from "@/features/ops-planning/number-formatting-context";
 
 interface RangeNumberFieldProps {
+  id?: string;
+  name?: string;
   label: string;
   description: string;
   value: number;
@@ -26,6 +28,8 @@ interface RangeNumberFieldProps {
 }
 
 export const RangeNumberField = ({
+  id,
+  name,
   label,
   description,
   value,
@@ -38,6 +42,10 @@ export const RangeNumberField = ({
   suffix,
   tooltip,
 }: RangeNumberFieldProps) => {
+  const autoId = useId();
+  const inputId = id || autoId;
+  const rangeId = `${inputId}-range`;
+  const inputName = name || inputId;
   const formatDisplay = useNumberFormatting();
   const resolvedFormatType = formatType ?? (Number.isInteger(step) ? "integer" : "decimal");
   const resolvedDecimalDigits =
@@ -97,12 +105,15 @@ export const RangeNumberField = ({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <label className="text-xs font-medium text-foreground">{label}</label>
+        <label htmlFor={inputId} className="text-xs font-medium text-foreground">{label}</label>
         <TooltipInfo content={tooltip} />
       </div>
 
       <div className="ops-input-grid">
         <input
+          id={rangeId}
+          name={`${inputName}-range`}
+          aria-label={`${label} (controle deslizante)`}
           type="range"
           min={min}
           max={max}
@@ -111,19 +122,21 @@ export const RangeNumberField = ({
           onChange={(event) => {
             const next = Number(event.target.value);
             onChange(next);
-             setDraftValue(toDisplayValue(next));
+            setDraftValue(toDisplayValue(next));
           }}
           className="w-full accent-primary"
         />
         <Input
-           type="text"
-           inputMode={resolvedFormatType === "decimal" ? "decimal" : "numeric"}
+          id={inputId}
+          name={inputName}
+          type="text"
+          inputMode={resolvedFormatType === "decimal" ? "decimal" : "numeric"}
           value={draftValue}
-           data-step={step}
-           onFocus={(event) => {
-             setDraftValue(String(value));
-             event.currentTarget.select();
-           }}
+          data-step={step}
+          onFocus={(event) => {
+            setDraftValue(String(value));
+            event.currentTarget.select();
+          }}
           onChange={(event) => setDraftValue(event.target.value)}
           onBlur={commitNumberInput}
           onKeyDown={(event) => {

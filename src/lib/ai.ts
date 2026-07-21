@@ -1,17 +1,29 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-
-export async function askGemini(prompt: string): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+export async function askGemini(prompt: string, systemPrompt?: string): Promise<string> {
+  const key = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!key) {
+    throw new Error("Chave de API Gemini (VITE_GEMINI_API_KEY) não configurada.");
+  }
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction: systemPrompt,
+  });
   const result = await model.generateContent(prompt);
   return result.response.text();
 }
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DASHSCOPE_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY as string;
+const DASHSCOPE_URL = import.meta.env.DEV
+  ? "/api/dashscope/compatible-mode/v1/chat/completions"
+  : "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-export async function askOpenRouter(prompt: string, systemPrompt?: string): Promise<string> {
+export async function askQwen(prompt: string, systemPrompt?: string): Promise<string> {
+  if (!DASHSCOPE_API_KEY) {
+    throw new Error("Chave de API do DashScope (VITE_DASHSCOPE_API_KEY) não configurada.");
+  }
+
   const messages: { role: string; content: string }[] = [];
   
   if (systemPrompt) {
@@ -19,25 +31,30 @@ export async function askOpenRouter(prompt: string, systemPrompt?: string): Prom
   }
   messages.push({ role: "user", content: prompt });
 
-  const response = await fetch(OPENROUTER_URL, {
+  const response = await fetch(DASHSCOPE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "Dimensionamento Calculator"
+      "Authorization": `Bearer ${DASHSCOPE_API_KEY}`
     },
     body: JSON.stringify({
-      model: "minimax/minimax-m2.5:free",
+      model: "qwen3.7-max",
       messages,
       temperature: 0.7,
-      max_tokens: 2048
+      max_tokens: 4096
     })
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Erro ${response.status}: ${response.statusText}`);
+    const rawText = await response.text().catch(() => "");
+    let apiMessage = "";
+    try {
+      const parsed = JSON.parse(rawText);
+      apiMessage = parsed?.error?.message || parsed?.message || parsed?.code || "";
+    } catch {
+      apiMessage = rawText.slice(0, 200);
+    }
+    throw new Error(apiMessage || `Erro HTTP ${response.status}: ${response.statusText}`);
   }
 
   const data = await response.json();

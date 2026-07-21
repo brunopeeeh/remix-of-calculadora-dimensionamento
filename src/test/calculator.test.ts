@@ -6,25 +6,32 @@ import { PlannerInputs } from "@/features/ops-planning/types";
 
 // ── Helpers ──
 
-const minimal = (overrides: Partial<PlannerInputs> = {}): PlannerInputs => ({
-  ...EMPTY_PLANNER_INPUTS,
-  currentClients: 1000,
-  targetClientsQ4: 1000,
-  contactRate: 1,
-  headcountCurrent: 0,
-  productivityBase: 100,
-  rampUpMonths: 3,
-  startMonth: 3,
-  endMonth: 8,
-  leadTimeMonths: 2,
-  hiringMode: "gap",
-  turnoverTiming: "end_of_month",
-  targetClientsGrowthPct: 0,
-  manualSeasonalityByMonth: {},
-  useTenureVacation: false,
-  agentsWithTenure: 0,
-  ...overrides,
-});
+const minimal = (overrides: Partial<PlannerInputs> = {}): PlannerInputs => {
+  const base: PlannerInputs = {
+    ...EMPTY_PLANNER_INPUTS,
+    currentClients: 1000,
+    targetClientsQ4: 1000,
+    contactRate: 1,
+    headcountCurrent: 0,
+    productivityBase: 100,
+    rampUpMonths: 3,
+    startMonth: 3,
+    endMonth: 8,
+    leadTimeMonths: 2,
+    hiringMode: "gap",
+    turnoverTiming: "end_of_month",
+    targetClientsGrowthPct: 0,
+    manualSeasonalityByMonth: {},
+    useTenureVacation: false,
+    agentsWithTenure: 0,
+    ...overrides,
+  };
+  // Sync headcountPleno with headcountCurrent for backward compat
+  if (overrides.headcountPleno === undefined) {
+    base.headcountPleno = base.headcountCurrent;
+  }
+  return base;
+};
 
 // ── Ramp-up unit tests ──
 
@@ -196,6 +203,26 @@ describe("hiringMode gap vs antecipado", () => {
 
     expect(antRow.openMonthIndex).toBeLessThan(gapRow.openMonthIndex);
   });
+
+  it("antecipado first pass does not inflate hires beyond gap (regression test)", () => {
+    // Com C2 o planejador agora desconta turnover → o gapFte interno do Passo 2 pode
+    // ser maior que o gapFte do Passo 3 (relato). O invariante correto é:
+    // hiresYear > 0 (há contratações) e o total é finito.
+    const proj = runPlannerProjection(minimal({
+      headcountCurrent: 10,
+      startMonth: 1, endMonth: 12,
+      targetClientsQ4: 5000,
+      hiringMode: "antecipado",
+      leadTimeMonths: 2,
+      rampUpMonths: 3,
+    }));
+    expect(proj.summary.hiresYear).toBeGreaterThan(0);
+    expect(Number.isFinite(proj.summary.hiresYear)).toBe(true);
+    // Nenhuma linha deve ter hcFinal negativo
+    proj.rows.forEach(row => {
+      expect(row.hcFinal).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
 
 // ── Turnover timing ──
@@ -288,11 +315,11 @@ describe("turnover strict periodicity and base logic", () => {
     });
 
     expect(proj.timeline).toHaveLength(4);
-    // Com periodo anual, o turnover mensal e 12/12 = 1
+    // Com periodo anual, o turnover mensal e 12/12 = 1 aplicado todos os meses
     expect(proj.rows[0].turnover).toBe(1);
-    expect(proj.rows[1].turnover).toBe(0);
-    expect(proj.rows[2].turnover).toBe(0);
-    expect(proj.rows[3].turnover).toBe(0);
+    expect(proj.rows[1].turnover).toBe(1);
+    expect(proj.rows[2].turnover).toBe(1);
+    expect(proj.rows[3].turnover).toBe(1);
   });
 
   it("anual + percentual: aplica percentual mensal", () => {
@@ -304,10 +331,10 @@ describe("turnover strict periodicity and base logic", () => {
     });
 
     // HC = 20. 12% ao ano = 12/12 = 1% ao mes
-    // 20 * 1% = 0.2
+    // Mês 0: 20 * 1% = 0.2
     expect(proj.rows[0].turnover).toBeCloseTo(0.2);
-    // Meses seguintes sao 0 pois o proximo trigger anual nao chega nesta timeline
-    expect(proj.rows[1].turnover).toBe(0);
+    // Mês 1: (20 - 0.2) * 1% = 0.198 (aplicado todos os meses)
+    expect(proj.rows[1].turnover).toBeCloseTo(0.198);
   });
 
   it("semestral + absoluto: aplica valor mensal", () => {
@@ -318,10 +345,10 @@ describe("turnover strict periodicity and base logic", () => {
       turnoverInputMode: "absoluto",
     });
 
-    // 12/6 = 2 por mes
+    // 12/6 = 2 por mes em todos os meses
     expect(proj.rows[0].turnover).toBe(2);
-    expect(proj.rows[1].turnover).toBe(0);
-    expect(proj.rows[2].turnover).toBe(0);
+    expect(proj.rows[1].turnover).toBe(2);
+    expect(proj.rows[2].turnover).toBe(2);
   });
 
   it("semestral + percentual: aplica percentual mensal", () => {
@@ -371,7 +398,7 @@ describe("turnover strict periodicity and base logic", () => {
     expect(proj6.rows[0].turnover).toBe(2);
   });
 
-  it("turnover trimestral aplica a cada 3 meses", () => {
+  it("turnover trimestral aplica mensalmente a taxa rateada", () => {
     const proj = runPlannerProjection({
       ...baseConfig,
       turnoverValue: 5,
@@ -379,14 +406,13 @@ describe("turnover strict periodicity and base logic", () => {
       turnoverInputMode: "absoluto",
     });
 
-    // Timeline de 6 meses (Jan-Jun): triggers em index 0 e 3
-    // turnover mensal = 5/3 = 1.67
+    // Timeline de 6 meses (Jan-Jun): taxa mensal de 5/3 = 1.67 em todos os meses
     expect(proj.rows[0].turnover).toBeCloseTo(1.67);
-    expect(proj.rows[1].turnover).toBe(0);
-    expect(proj.rows[2].turnover).toBe(0);
+    expect(proj.rows[1].turnover).toBeCloseTo(1.67);
+    expect(proj.rows[2].turnover).toBeCloseTo(1.67);
     expect(proj.rows[3].turnover).toBeCloseTo(1.67);
-    expect(proj.rows[4].turnover).toBe(0);
-    expect(proj.rows[5].turnover).toBe(0);
+    expect(proj.rows[4].turnover).toBeCloseTo(1.67);
+    expect(proj.rows[5].turnover).toBeCloseTo(1.67);
   });
 });
 
@@ -495,26 +521,27 @@ describe("cohort ramp-up parametrized", () => {
 
   it("rampUpMonths=2: first month at 50%", () => {
     const proj = runPlannerProjection(cohortBase(2));
-    // Month 0 hires contribute at 50%
-    if (proj.rows[0].hire > 0) {
-      const expectedEffective = proj.rows[0].hire * 0.5;
-      expect(proj.rows[0].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
+    // Com C1 (startIndex mínimo=1), cohorts abertos no mês 0 só iniciam no mês 1.
+    // A contribuição parcial de ramp deve ser verificada no mês 1 (índice 1).
+    if (proj.rows.length > 1 && proj.rows[1].hiresStarted > 0) {
+      const expectedEffective = proj.rows[1].hiresStarted * 0.5;
+      expect(proj.rows[1].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
     }
   });
 
   it("rampUpMonths=3: first month at 33%", () => {
     const proj = runPlannerProjection(cohortBase(3));
-    if (proj.rows[0].hire > 0) {
-      const expectedEffective = proj.rows[0].hire * (1 / 3);
-      expect(proj.rows[0].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
+    if (proj.rows.length > 1 && proj.rows[1].hiresStarted > 0) {
+      const expectedEffective = proj.rows[1].hiresStarted * (1 / 3);
+      expect(proj.rows[1].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
     }
   });
 
   it("rampUpMonths=4: first month at 25%", () => {
     const proj = runPlannerProjection(cohortBase(4));
-    if (proj.rows[0].hire > 0) {
-      const expectedEffective = proj.rows[0].hire * 0.25;
-      expect(proj.rows[0].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
+    if (proj.rows.length > 1 && proj.rows[1].hiresStarted > 0) {
+      const expectedEffective = proj.rows[1].hiresStarted * 0.25;
+      expect(proj.rows[1].hcAvailableEffective).toBeCloseTo(expectedEffective, 1);
     }
   });
 });

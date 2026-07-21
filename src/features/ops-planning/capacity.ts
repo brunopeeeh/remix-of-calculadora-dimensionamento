@@ -13,18 +13,50 @@ const BASE_WEIGHTED_TMA = 20 * 0.8 + 45 * 0.2; // = 25 minutos
 
 export const computeTenureVacationPct = (agentsWithTenure: number, totalHeadcount: number): number => {
   if (agentsWithTenure <= 0 || totalHeadcount <= 0) return 0;
-  const maxConcurrentAgents = 1;
+  // C5: máximo de agentes de férias simultâneos proporcional ao headcount (5%, mín. 1).
+  // Antes era fixo em 1, o que distorcia silenciosamente para times grandes.
+  const maxConcurrentAgents = Math.max(1, Math.floor(totalHeadcount * 0.05));
   const periodsPerYear = agentsWithTenure * 2;
   const periodsPerMonth = periodsPerYear / 12;
   const actualAgentsOnVacation = Math.min(periodsPerMonth, maxConcurrentAgents);
   return actualAgentsOnVacation / totalHeadcount;
 };
 
-export const computeCapacityPerAgent = (inputs: PlannerInputs): number => {
+
+export const computeAdjustedMix = (
+  inputMixN1Pct: number,
+  inputMixN2Pct: number,
+  promotionsCount: number,
+  headcountCurrent: number,
+  monthIndex: number,
+  totalMonths: number
+): { mixN1Pct: number; mixN2Pct: number } => {
+  if (promotionsCount <= 0 || headcountCurrent <= 0 || totalMonths <= 0) {
+    return { mixN1Pct: inputMixN1Pct, mixN2Pct: inputMixN2Pct };
+  }
+
+  const n1Count = (inputMixN1Pct / 100) * headcountCurrent;
+  const maxPromotions = Math.floor(Math.max(0, n1Count));
+  const effectivePromotions = Math.min(promotionsCount, maxPromotions);
+
+  const cumulativePromotions = effectivePromotions * (monthIndex + 1) / totalMonths;
+  const pctShift = (cumulativePromotions / headcountCurrent) * 100;
+  const adjustedN1 = Math.max(0, inputMixN1Pct - pctShift);
+
+  return {
+    mixN1Pct: adjustedN1,
+    mixN2Pct: 100 - adjustedN1,
+  };
+};
+
+export const computeCapacityPerAgent = (
+  inputs: PlannerInputs,
+  adjustedMix?: { mixN1Pct: number; mixN2Pct: number }
+): number => {
   const tmaN1 = Number(inputs.tmaN1) || 0;
   const tmaN2 = Number(inputs.tmaN2) || 0;
-  const mixN1Pct = Number(inputs.mixN1Pct) || 0;
-  const mixN2Pct = Number(inputs.mixN2Pct) || 0;
+  const mixN1Pct = adjustedMix?.mixN1Pct ?? (Number(inputs.mixN1Pct) || 0);
+  const mixN2Pct = adjustedMix?.mixN2Pct ?? (Number(inputs.mixN2Pct) || 0);
 
   const weightedTma = inputs.useN1N2Split
     ? (tmaN1 * mixN1Pct) / 100 + (tmaN2 * mixN2Pct) / 100
