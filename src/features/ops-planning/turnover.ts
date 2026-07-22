@@ -36,9 +36,15 @@ export interface TurnoverContext {
   activeTimelineKeySet: Set<string>;
   activeCount: number;
   periodMonths: number;
+  /** HC de referência para o modo "hc_inicial". */
+  hcInicial: number;
+  baseMode: NonNullable<PlannerInputs["turnoverBaseMode"]>;
 }
 
 export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint[]): TurnoverContext => {
+  const hcInicial = inputs.headcountCurrent;
+  const baseMode = inputs.turnoverBaseMode ?? "hc_corrente";
+
   // If user has manually selected specific months, respect those
   if (inputs.turnoverMonths.length > 0) {
     const unique = [...new Set(inputs.turnoverMonths)];
@@ -46,6 +52,8 @@ export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint
       activeTimelineKeySet: new Set(unique),
       activeCount: unique.length,
       periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
+      hcInicial,
+      baseMode,
     };
   }
 
@@ -57,6 +65,8 @@ export const buildTurnoverContext = (inputs: PlannerInputs, timeline: MonthPoint
     activeTimelineKeySet: new Set(unique),
     activeCount: unique.length,
     periodMonths: getTurnoverPeriodMonths(inputs.turnoverPeriod),
+    hcInicial,
+    baseMode,
   };
 };
 
@@ -75,7 +85,11 @@ export const resolveTurnoverForMonth = (
   const monthlyRate = inputs.turnoverValue / denominator;
 
   if (inputs.turnoverInputMode === "percentual") {
-    return hcBase * (monthlyRate / 100);
+    // Problema 2: no modo "hc_inicial" o percentual incide sobre o HC de hoje
+    // (fixo), então o total de saídas bate com "taxa x HC inicial". No modo
+    // "hc_corrente" incide sobre o HC do mês (cresce com o time).
+    const base = ctx.baseMode === "hc_inicial" ? ctx.hcInicial : hcBase;
+    return base * (monthlyRate / 100);
   }
 
   return monthlyRate;
@@ -103,7 +117,9 @@ export const buildTurnoverFormula = (
   const monthlyRate = inputs.turnoverValue / denominator;
 
   if (inputs.turnoverInputMode === "percentual") {
-    return `${prefix} | Base: HC (${fmt(hcBase)}) | ${fmt(monthlyRate)}% mensal = ${fmt(turnover)}`;
+    const base = ctx.baseMode === "hc_inicial" ? ctx.hcInicial : hcBase;
+    const baseLabel = ctx.baseMode === "hc_inicial" ? "HC inicial" : "HC do mês";
+    return `${prefix} | Base: ${baseLabel} (${fmt(base)}) | ${fmt(monthlyRate)}% mensal = ${fmt(turnover)}`;
   }
 
   return `${prefix} | ${fmt(monthlyRate)} abs/mês = ${fmt(turnover)}`;

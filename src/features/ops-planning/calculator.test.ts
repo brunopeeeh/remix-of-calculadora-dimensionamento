@@ -258,3 +258,66 @@ describe('convergência do plano de contratação', () => {
     expect(proj.summary.hiresScheduledLate ?? 0).toBeGreaterThan(0);
   });
 });
+
+describe('semântica da base do turnover (Problema 2)', () => {
+  const base: PlannerInputs = {
+    ...defaultInputs,
+    currentClients: 6800,
+    targetClientsQ4: 9500,
+    currentVolume: 18000,
+    contactRate: 2.65,
+    aiCoveragePct: 27,
+    aiGrowthMonthlyPct: 0,
+    extraAutomationPct: 0,
+    headcountCurrent: 12,
+    headcountPleno: 12,
+    headcountNovo: 0,
+    productivityBase: 900,
+    useN1N2Split: false,
+    tmaN1: 20,
+    breaksPct: 0,
+    offchatPct: 0,
+    meetingsPct: 0,
+    vacationPct: 0,
+    promotionsCount: 0,
+    rampUpMonths: 3,
+    leadTimeMonths: 1,
+    hiringMode: 'antecipado',
+    turnoverValue: 25,
+    turnoverPeriod: 'anual',
+    turnoverInputMode: 'percentual',
+    turnoverTiming: 'end_of_month',
+    turnoverMonths: [],
+    startMonth: 1, endMonth: 12,
+  };
+
+  const totalTurnover = (inp: PlannerInputs) =>
+    runPlannerProjection(inp).rows.reduce((acc, r) => acc + r.turnover, 0);
+
+  it('hc_inicial: total de saídas = taxa% x HC inicial (o número que o RH reporta)', () => {
+    // 25% ao ano sobre 12 pessoas, janela de 12 meses => exatamente 3
+    expect(totalTurnover({ ...base, turnoverBaseMode: 'hc_inicial' })).toBeCloseTo(3, 3);
+  });
+
+  it('hc_inicial: escala linear com a taxa', () => {
+    [10, 25, 40].forEach((taxa) => {
+      const total = totalTurnover({ ...base, turnoverValue: taxa, turnoverBaseMode: 'hc_inicial' });
+      expect(total).toBeCloseTo((taxa / 100) * 12, 3);
+    });
+  });
+
+  it('hc_corrente é o default (retrocompatível) e difere de hc_inicial quando o time cresce', () => {
+    const semCampo = totalTurnover({ ...base });
+    const corrente = totalTurnover({ ...base, turnoverBaseMode: 'hc_corrente' });
+    const inicial = totalTurnover({ ...base, turnoverBaseMode: 'hc_inicial' });
+
+    expect(semCampo).toBeCloseTo(corrente, 6); // ausente == hc_corrente
+    expect(corrente).toBeGreaterThan(inicial); // base cresce => mais saídas
+  });
+
+  it('modo absoluto ignora a base (o valor já é em pessoas)', () => {
+    const inicial = totalTurnover({ ...base, turnoverInputMode: 'absoluto', turnoverValue: 4, turnoverBaseMode: 'hc_inicial' });
+    const corrente = totalTurnover({ ...base, turnoverInputMode: 'absoluto', turnoverValue: 4, turnoverBaseMode: 'hc_corrente' });
+    expect(inicial).toBeCloseTo(corrente, 6);
+  });
+});

@@ -20,6 +20,11 @@ const migrateInputs = (raw: Partial<PlannerInputs>): PlannerInputs => {
   if (migrated.headcountNovo == null) {
     migrated.headcountNovo = 0;
   }
+  if (migrated.turnoverBaseMode == null) {
+    // Retrocompatível: estados antigos e presets sem o campo mantêm o
+    // comportamento anterior (percentual sobre o HC do mês).
+    migrated.turnoverBaseMode = "hc_corrente";
+  }
   return migrated;
 };
 
