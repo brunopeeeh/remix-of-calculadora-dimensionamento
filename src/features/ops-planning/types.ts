@@ -147,6 +147,8 @@ export interface ProjectionSummary {
   riskMonths: string[];
   /** Vagas que precisariam ter começado antes do horizonte para chegar a tempo (déficit inevitável). */
   hiresScheduledLate?: number;
+  /** Meses cujo déficit é estruturalmente incobrível dentro do horizonte (vão ter fila). */
+  uncoverableMonths?: string[];
 }
 
 export interface ProjectionResult {

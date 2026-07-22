@@ -434,6 +434,12 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
   const riskMonths = rows.filter((r) => r.gap > 0).map((r) => r.month.label);
   const criticalOpenMonth = rows.find((r) => r.gap > 0)?.openIn ?? "Sem risco";
 
+  // Meses cujo déficit é estruturalmente incobrível (lead time + ramp não chegam
+  // a tempo). Útil para a UI distinguir "contrate mais" de "aqui vai ter fila".
+  const uncoverableMonths = timeline
+    .filter((_, i) => uncoverable[i])
+    .map((p) => p.label);
+
   return {
     timeline,
     rows,
@@ -448,6 +454,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
       criticalOpenMonth,
       riskMonths,
       hiresScheduledLate,
+      uncoverableMonths,
     },
   };
 };
