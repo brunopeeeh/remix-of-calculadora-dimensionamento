@@ -12,8 +12,10 @@ describe("ExecutiveSummary", () => {
     render(<ExecutiveSummary rows={projection.rows} summary={projection.summary} inputs={inputs} />);
     const firstLabel = projection.timeline[0]?.label ?? "";
     const lastLabel = projection.timeline[projection.timeline.length - 1]?.label ?? "";
-    expect(screen.getByText(new RegExp(firstLabel))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(lastLabel))).toBeInTheDocument();
+    // O primeiro mês pode aparecer também na lista de déficit estrutural,
+    // então basta que exista ao menos uma ocorrência.
+    expect(screen.getAllByText(new RegExp(firstLabel)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(new RegExp(lastLabel)).length).toBeGreaterThan(0);
   });
 
   it("renders the month count", () => {
@@ -21,12 +23,29 @@ describe("ExecutiveSummary", () => {
     expect(screen.getByText(new RegExp(`${projection.rows.length} meses`))).toBeInTheDocument();
   });
 
-  it("renders risk information when there are risk months", () => {
-    const riskyInputs = { ...inputs, headcountCurrent: 1, currentClients: 10000, targetClientsQ4: 20000 };
+  it("renders risk or structural-deficit information when there are risk months", () => {
+    const riskyInputs = { ...inputs, headcountCurrent: 1, headcountPleno: 1, currentClients: 10000, targetClientsQ4: 20000 };
     const riskyProjection = runPlannerProjection(riskyInputs);
     render(<ExecutiveSummary rows={riskyProjection.rows} summary={riskyProjection.summary} inputs={riskyInputs} />);
-    if (riskyProjection.summary.riskMonths.length > 0) {
-      expect(screen.getByText(/atenção/i)).toBeInTheDocument();
+    const uncoverable = riskyProjection.summary.uncoverableMonths ?? [];
+    const late = riskyProjection.summary.hiresScheduledLate ?? 0;
+    if (uncoverable.length > 0 && late > 0) {
+      // Déficit estrutural: nenhuma contratação cobre esses meses a tempo.
+      expect(screen.getByText(/déficit inevitável/i)).toBeInTheDocument();
+    } else if (riskyProjection.summary.riskMonths.length > 0) {
+      expect(screen.getByText(/gap/i)).toBeInTheDocument();
+    }
+  });
+
+  it("shows structural deficit as the dominant state over coverable risk", () => {
+    // Base já tem déficit estrutural nos primeiros meses (ramp+lead).
+    const proj = runPlannerProjection(inputs);
+    const uncoverable = proj.summary.uncoverableMonths ?? [];
+    if ((proj.summary.hiresScheduledLate ?? 0) > 0 && uncoverable.length > 0) {
+      render(<ExecutiveSummary rows={proj.rows} summary={proj.summary} inputs={inputs} />);
+      expect(screen.getByText(/déficit inevitável/i)).toBeInTheDocument();
+      // e nomeia ao menos um dos meses incobríveis (pode repetir no cabeçalho de período)
+      expect(screen.getAllByText(new RegExp(uncoverable[0])).length).toBeGreaterThan(0);
     }
   });
 
@@ -43,7 +62,7 @@ describe("ExecutiveSummary", () => {
     const { container } = render(
       <ExecutiveSummary
         rows={[]}
-        summary={{ volumeQ4: 0, volumeHumanQ4: 0, capacityPerAgent: 0, agentsNeededQ4: 0, hiresYear: 0, criticalOpenMonth: "", riskMonths: [] }}
+        summary={{ volumeQ4: 0, volumeHumanQ4: 0, capacityPerAgent: 0, agentsNeededQ4: 0, hcFinalQ4: 0, totalTurnoverYear: 0, hiresYear: 0, criticalOpenMonth: "", riskMonths: [] }}
         inputs={inputs}
       />
     );

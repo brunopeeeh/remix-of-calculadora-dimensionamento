@@ -4,6 +4,15 @@ export type HiringMode = "gap" | "antecipado";
 export type TurnoverPeriod = "mensal" | "trimestral" | "semestral" | "anual";
 export type TurnoverInputMode = "absoluto" | "percentual";
 export type TurnoverTiming = "start_of_month" | "end_of_month";
+/**
+ * Base sobre a qual o turnover percentual incide:
+ *  - "hc_corrente": HC do mês (cresce com o time). Turnover-real de RH, mas o total
+ *    de saídas fica ACIMA da taxa nominal quando o time cresce no período.
+ *  - "hc_inicial": HC de hoje, fixo. O total de saídas bate com "taxa x HC inicial",
+ *    que é como o gestor costuma pensar o número ("25% dos meus 12 = 3").
+ * Absoluto ignora este campo (o valor já é em pessoas).
+ */
+export type TurnoverBaseMode = "hc_corrente" | "hc_inicial";
 export type RookieRampMonth = 1 | 2 | 3;
 
 /** Configurable productivity factors for each ramp-up month */
@@ -58,6 +67,8 @@ export interface PlannerInputs {
   turnoverInputMode: TurnoverInputMode;
   turnoverTiming: TurnoverTiming;
   turnoverMonths: string[];
+  /** Base do turnover percentual. Ausente = "hc_corrente" (retrocompatível). */
+  turnoverBaseMode?: TurnoverBaseMode;
 
   leadTimeMonths: number;
   hiringMode: HiringMode;
@@ -134,6 +145,10 @@ export interface ProjectionSummary {
   hiresYear: number;
   criticalOpenMonth: string;
   riskMonths: string[];
+  /** Vagas que precisariam ter começado antes do horizonte para chegar a tempo (déficit inevitável). */
+  hiresScheduledLate?: number;
+  /** Meses cujo déficit é estruturalmente incobrível dentro do horizonte (vão ter fila). */
+  uncoverableMonths?: string[];
 }
 
 export interface ProjectionResult {

@@ -46,6 +46,35 @@ export const TurnoverSection = ({ inputs, patch, toggleTurnoverMonth, timeline, 
             </div>
           </div>
 
+          {inputs.turnoverInputMode === "percentual" && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Base do percentual</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={(inputs.turnoverBaseMode ?? "hc_corrente") === "hc_inicial" ? "default" : "outline"}
+                  onClick={() => patch("turnoverBaseMode", "hc_inicial")}
+                >
+                  HC inicial
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={(inputs.turnoverBaseMode ?? "hc_corrente") === "hc_corrente" ? "default" : "outline"}
+                  onClick={() => patch("turnoverBaseMode", "hc_corrente")}
+                >
+                  HC do mês
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {(inputs.turnoverBaseMode ?? "hc_corrente") === "hc_inicial"
+                  ? "Total de saídas = taxa × HC de hoje (bate com o número do RH)."
+                  : "Incide sobre o HC de cada mês; como o time cresce, o total fica acima da taxa nominal."}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <p className="text-xs font-medium">Aplicação no mês</p>
             <div className="grid grid-cols-2 gap-2">
@@ -63,7 +92,7 @@ export const TurnoverSection = ({ inputs, patch, toggleTurnoverMonth, timeline, 
 
       <SimpleNumberField
         label={`Turnover ${inputs.turnoverPeriod}`}
-        description={inputs.turnoverInputMode === "percentual" ? "Taxa em % (base: HC disponível do mês)" : "Quantidade de saídas no período selecionado"}
+        description={inputs.turnoverInputMode === "percentual" ? ((inputs.turnoverBaseMode ?? "hc_corrente") === "hc_inicial" ? "Taxa em % (base: HC inicial, fixo)" : "Taxa em % (base: HC do mês)") : "Quantidade de saídas no período selecionado"}
         tooltip={inputs.turnoverInputMode === "percentual" ? "A taxa é convertida para base mensal e aplicada sobre o HC disponível nos meses marcados." : "O valor absoluto é convertido para base mensal e distribuído nos meses marcados."}
         value={inputs.turnoverValue}
         min={0}

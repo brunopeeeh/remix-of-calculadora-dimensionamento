@@ -23,6 +23,11 @@ export const KPISection = ({ summary, inputs, hiringAction }: KPISectionProps) =
     ? ((clientGrowth / inputs.currentClients) * 100).toFixed(0)
     : "0";
 
+  const structuralAgents = summary.hiresScheduledLate ?? 0;
+  const structuralMonths = summary.uncoverableMonths ?? [];
+  const hasStructural = structuralAgents > 0 && structuralMonths.length > 0;
+  const hasRisk = summary.riskMonths.length > 0;
+
   return (
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KPIWidget
@@ -79,10 +84,26 @@ export const KPISection = ({ summary, inputs, hiringAction }: KPISectionProps) =
         index={5}
         icon={UserPlus}
         title="Plano de Admissões"
-        subtitle={summary.riskMonths.length > 0 ? `Mês crítico: ${summary.criticalOpenMonth}` : "Nenhuma vaga adicional"}
-        tooltip="Total de novas admissões necessárias ao longo do plano e o mês limite para abertura das vagas"
-        value={summary.riskMonths.length > 0 ? `${formatInt(summary.hiresYear)} admissões` : "Headcount OK"}
-        tone={summary.riskMonths.length > 0 ? "risk" : "success"}
+        subtitle={
+          hasStructural
+            ? `Fila inevitável em ${structuralMonths.length} mês(es): ${structuralMonths.join(", ")}`
+            : hasRisk
+            ? `Mês crítico: ${summary.criticalOpenMonth}`
+            : "Nenhuma vaga adicional"
+        }
+        tooltip={
+          hasStructural
+            ? `${formatInt(structuralAgents)} agente(s) não têm como chegar a tempo (lead time + rampa) nesses meses — antecipe o recrutamento ou planeje fila. As ${formatInt(summary.hiresYear)} admissões cobrem o restante do período.`
+            : "Total de novas admissões necessárias ao longo do plano e o mês limite para abertura das vagas"
+        }
+        value={
+          hasStructural
+            ? `${formatInt(summary.hiresYear)} + ${formatInt(structuralAgents)} em déficit`
+            : hasRisk
+            ? `${formatInt(summary.hiresYear)} admissões`
+            : "Headcount OK"
+        }
+        tone={hasStructural ? "risk" : hasRisk ? "risk" : "success"}
         action={hiringAction}
         isProminent
       />
