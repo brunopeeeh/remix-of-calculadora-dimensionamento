@@ -139,6 +139,21 @@ describe('calculator tests', () => {
       ...defaultInputs,
       headcountCurrent: 10,
       headcountPleno: 10,
+      // Produtividade realista para o cenário NÃO saturar: com productivityBase
+      // degenerado a demanda exige milhares de agentes e ambos os casos batem no
+      // teto do horizonte, mascarando a diferença (que iria para hiresScheduledLate).
+      productivityBase: 900,
+      useN1N2Split: false,
+      tmaN1: 20,
+      currentClients: 1000,
+      targetClientsQ4: 1400,
+      currentVolume: 9000,
+      contactRate: 9,
+      breaksPct: 0,
+      vacationPct: 0,
+      rampUpMonths: 2,
+      leadTimeMonths: 1,
+      hiringMode: 'antecipado',
       turnoverPeriod: 'mensal',
       turnoverInputMode: 'percentual',
       turnoverTiming: 'start_of_month',
@@ -147,9 +162,9 @@ describe('calculator tests', () => {
     };
 
     const withoutTurnover = runPlannerProjection({ ...baseInput, turnoverValue: 0 });
-    const withTurnover    = runPlannerProjection({ ...baseInput, turnoverValue: 20 }); // 20%/mês
+    const withTurnover    = runPlannerProjection({ ...baseInput, turnoverValue: 30 }); // 30%/mês
 
-    // Com turnover alto o planejamento precisa de mais contratações
+    // Com turnover alto o planejamento precisa de mais contratações para repor as saídas.
     expect(withTurnover.summary.hiresYear).toBeGreaterThan(withoutTurnover.summary.hiresYear);
   });
 
@@ -174,5 +189,72 @@ describe('calculator tests', () => {
 
     // N2 tem TMA maior → capacidade por agente cai à medida que promoções acumulam
     expect(last.capacityPerAgent).toBeLessThan(first.capacityPerAgent);
+  });
+});
+
+describe('convergência do plano de contratação', () => {
+  const realista: PlannerInputs = {
+    ...defaultInputs,
+    currentClients: 6800,
+    targetClientsQ4: 9500,
+    currentVolume: 18000,
+    contactRate: 2.65,
+    aiCoveragePct: 27,
+    aiGrowthMonthlyPct: 0,
+    extraAutomationPct: 0,
+    headcountCurrent: 12,
+    headcountPleno: 12,
+    headcountNovo: 0,
+    productivityBase: 900,
+    useN1N2Split: false,
+    tmaN1: 20,
+    breaksPct: 0,
+    offchatPct: 0,
+    meetingsPct: 0,
+    vacationPct: 0,
+    promotionsCount: 0,
+    rampUpMonths: 3,
+    leadTimeMonths: 1,
+    hiringMode: 'antecipado',
+    turnoverValue: 25,
+    turnoverPeriod: 'anual',
+    turnoverInputMode: 'percentual',
+    turnoverTiming: 'end_of_month',
+    turnoverMonths: [],
+    startMonth: 1, endMonth: 12,
+  };
+
+  it('não deixa gap residual nos meses que são cobríveis dentro do horizonte', () => {
+    const proj = runPlannerProjection(realista);
+    // Os primeiros meses (< ramp+lead) podem ser estruturalmente incobríveis.
+    // A partir daí, nenhum mês pode ficar descoberto.
+    const primeiroCobrivel = realista.rampUpMonths - 1 + realista.leadTimeMonths;
+    proj.rows.slice(primeiroCobrivel).forEach((r) => {
+      expect(r.gap).toBe(0);
+    });
+  });
+
+  it('não super-contrata: HC final não excede a necessidade de pico + 1', () => {
+    const proj = runPlannerProjection(realista);
+    const pico = Math.max(...proj.rows.map((r) => r.agentsNeeded));
+    expect(proj.summary.hcFinalQ4).toBeLessThanOrEqual(pico + 1);
+  });
+
+  it('lead time maior que o horizonte impede qualquer início de coorte', () => {
+    const proj = runPlannerProjection({
+      ...realista,
+      startMonth: 3, endMonth: 5, // 3 meses
+      leadTimeMonths: 5,
+    });
+    proj.rows.forEach((r) => expect(r.hiresStarted).toBe(0));
+    // O déficit inevitável é sinalizado, não escondido.
+    expect(proj.summary.hiresScheduledLate ?? 0).toBeGreaterThan(0);
+  });
+
+  it('déficit inevitável dos primeiros meses aparece em hiresScheduledLate', () => {
+    const proj = runPlannerProjection(realista);
+    // Com ramp 3 + lead 1 e uma base já sob pressão, os primeiros meses não
+    // têm como ser cobertos a tempo — isso precisa ficar explícito.
+    expect(proj.summary.hiresScheduledLate ?? 0).toBeGreaterThan(0);
   });
 });

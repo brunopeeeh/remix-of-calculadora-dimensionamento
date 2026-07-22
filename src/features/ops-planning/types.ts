@@ -134,6 +134,8 @@ export interface ProjectionSummary {
   hiresYear: number;
   criticalOpenMonth: string;
   riskMonths: string[];
+  /** Vagas que precisariam ter começado antes do horizonte para chegar a tempo (déficit inevitável). */
+  hiresScheduledLate?: number;
 }
 
 export interface ProjectionResult {

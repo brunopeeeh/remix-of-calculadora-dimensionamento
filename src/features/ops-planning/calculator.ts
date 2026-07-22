@@ -196,7 +196,6 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
   const linearStep = (inputs.targetClientsQ4 - inputs.currentClients) / totalSteps;
   const fallbackGrowth = computeFallbackManualGrowthPct(inputs, totalSteps);
 
-  const cohorts: HireCohort[] = [];
   const demandCache: Map<number, { clientsBase: number; contactRate: number; volumeGross: number; aiPct: number; volumeAI: number; volumeHuman: number }> = new Map();
   let previousClients = inputs.currentClients;
 
@@ -210,59 +209,129 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
     previousClients = demand.clientsBase;
   }
 
-  for (let index = 0; index < timeline.length; index++) {
-    const point = timeline[index];
-    const demand = demandCache.get(index)!;
-
-    // C3: capacidade dinâmica — recalcula mix N1/N2 a cada mês para refletir promoções acumuladas
-    const planningMix = inputs.useN1N2Split
-      ? computeAdjustedMix(inputs.mixN1Pct, inputs.mixN2Pct, inputs.promotionsCount, inputs.headcountCurrent, index, totalMonths)
-      : undefined;
-    const planningCapacity = computeCapacityPerAgent(inputs, planningMix);
-    const agentsNeededRaw = demand.volumeHuman / Math.max(1, planningCapacity);
-    const agentsNeeded = Math.ceil(agentsNeededRaw);
-
-    let hcEffective = inputs.headcountCurrent;
-    for (const c of cohorts) {
-      if (c.startIndex <= index) {
-        const monthsSinceStart = index - c.startIndex;
-        const rampFactor = getRampFactor(monthsSinceStart, inputs.rampUpMonths);
-        hcEffective += c.count * rampFactor;
-      }
-    }
-
-    // C2: descontar turnover estimado antes de comparar com agentsNeeded
-    const turnoverThisMonth = resolveTurnoverForMonth(inputs, turnoverContext, point.key, hcEffective);
-    hcEffective = Math.max(0, hcEffective - turnoverThisMonth);
-
-    if (agentsNeeded > hcEffective) {
-      const gapFte = agentsNeeded - hcEffective;
-      // C1: modo "antecipado" antecipa o startIndex real para que o cohort esteja
-      // com ramp completo no mês do gap. Mínimo de 1 mês (nunca no mês 0).
-      const rampOffset = inputs.hiringMode === "antecipado"
-        ? getRampMaturationOffset(inputs.rampUpMonths)
-        : 0;
-      const startIndex = Math.max(1, index + inputs.leadTimeMonths - rampOffset);
-      if (startIndex < timeline.length) {
-        const existingCohort = cohorts.find(c => c.startIndex === startIndex);
-        if (existingCohort) {
-          existingCohort.count = Math.max(existingCohort.count, Math.ceil(gapFte));
-        } else {
-          cohorts.push({
-            openedAtIndex: index,
-            startIndex,
-            count: Math.ceil(gapFte),
-          });
-        }
-      }
-    }
-  }
-
-  const rows: MonthlyProjection[] = [];
   const safeHcNovo = inputs.headcountNovo ?? 0;
   const safeRampFactors = inputs.rookieRampFactors ?? { month1: 0.33, month2: 0.66, month3: 1.0 };
   const basePleno = inputs.headcountPleno ?? inputs.headcountCurrent;
-  
+
+  // Necessidade de agentes por mês (independe das contratações) — calculada uma vez.
+  const agentsNeededByIndex: number[] = [];
+  const capacityByIndex: number[] = [];
+  for (let index = 0; index < timeline.length; index++) {
+    const demand = demandCache.get(index)!;
+    const adjustedMix = inputs.useN1N2Split
+      ? computeAdjustedMix(inputs.mixN1Pct, inputs.mixN2Pct, inputs.promotionsCount, inputs.headcountCurrent, index, totalMonths)
+      : undefined;
+    const capacity = computeCapacityPerAgent(inputs, adjustedMix);
+    capacityByIndex.push(capacity);
+    agentsNeededByIndex.push(Math.ceil(demand.volumeHuman / Math.max(1, capacity)));
+  }
+
+  /**
+   * Simula a operação inteira para um dado conjunto de contratações e devolve
+   * o hcEffective real de cada mês (mesma matemática do relatório final:
+   * plenos + rookies em ramp + coortes em ramp, com turnover drenando o estado).
+   * É a única fonte de verdade de headcount — planejamento e relatório usam isto.
+   */
+  const simulateHcEffective = (plannedCohorts: HireCohort[]): number[] => {
+    const st: SimulationState = {
+      legacyPleno: basePleno,
+      legacyRookie: safeHcNovo,
+      cohorts: plannedCohorts.map(c => ({ ...c })),
+    };
+    const out: number[] = [];
+    for (let index = 0; index < timeline.length; index++) {
+      const point = timeline[index];
+      const activePastCohorts = getActivePastCohorts(st.cohorts, index);
+      const allActiveCohorts = getAllActiveCohorts(st.cohorts, index);
+
+      const hcNominalStart = computeHCNominalStart(st, activePastCohorts);
+      const turnover = resolveTurnoverForMonth(inputs, turnoverContext, point.key, hcNominalStart);
+
+      if (inputs.turnoverTiming === "start_of_month" && turnover > 0) {
+        applyTurnoverStartOfMonth(st, turnover, hcNominalStart, activePastCohorts);
+      }
+
+      const { hcEffective } = computeHCEffective(st, allActiveCohorts, index, inputs.rampUpMonths, safeRampFactors);
+      out.push(hcEffective);
+
+      if (inputs.turnoverTiming === "end_of_month" && turnover > 0) {
+        applyTurnoverEndOfMonth(st, turnover, activePastCohorts);
+      }
+    }
+    return out;
+  };
+
+  // ── Planejamento convergente de contratações ──
+  // Simula tudo, acha o primeiro mês em déficit, agenda a coorte com antecedência
+  // de ramp+lead, re-simula e repete até nenhum mês ficar descoberto (ou ser
+  // impossível cobri-lo dentro do horizonte, caso em que registramos o atraso).
+  const cohorts: HireCohort[] = [];
+  // Meses cujo déficit é estruturalmente incobrível (lead time + ramp não chegam a tempo).
+  const uncoverable = new Array<boolean>(timeline.length).fill(false);
+  let hiresScheduledLate = 0;
+
+  // Antecedência para a coorte ESTAR MADURA (100% de ramp) no mês-alvo.
+  // Um agente que começa tarde demais não fecha o mês: ele só entrega uma fração
+  // pela curva de ramp. Este é o piso de antecedência em ambos os modos.
+  const maturationOffset = getRampMaturationOffset(inputs.rampUpMonths);
+
+  // "antecipado": abre a vaga com uma folga extra de um ciclo de ramp, ficando
+  // mais robusto a turnover e cobrindo meses que o modo reativo deixaria a
+  // descoberto quando o horizonte é curto. "gap": abre no limite da maturação.
+  const extraLead = inputs.hiringMode === "antecipado" ? maturationOffset : 0;
+
+  // Cada iteração trata o primeiro déficit cobrível, agenda a coorte e re-simula.
+  // Um mês pode ser reforçado várias vezes até fechar (a curva de ramp reduz o
+  // aporte efetivo da coorte, então às vezes é preciso mais de uma rodada).
+  const MAX_PASSES = 3000;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const hcEff = simulateHcEffective(cohorts);
+    let changed = false;
+
+    for (let index = 0; index < timeline.length; index++) {
+      if (uncoverable[index]) continue;
+      const deficit = agentsNeededByIndex[index] - hcEff[index];
+      if (deficit <= 1e-6) continue;
+
+      // A coorte precisa estar madura em `index` (piso), nunca começar no mês 0,
+      // e respeitar o lead time de recrutamento a partir de hoje.
+      const earliestStart = Math.max(1, inputs.leadTimeMonths);
+      const maturityStart = index - maturationOffset;
+
+      if (maturityStart < earliestStart) {
+        // Nem abrindo a vaga hoje a coorte amadurece a tempo: déficit inevitável.
+        const count = Math.max(1, Math.ceil(deficit - 1e-6));
+        hiresScheduledLate += count;
+        uncoverable[index] = true;
+        continue;
+      }
+
+      // Início efetivo: adianta pela folga do modo, sem furar o piso de calendário.
+      const startIndex = Math.max(earliestStart, maturityStart - extraLead);
+
+      // Reforça 1 FTE por rodada e re-simula: como a coorte entra em ramp e sofre
+      // turnover, medir o efeito real evita super-contratar.
+      const existing = cohorts.find(c => c.startIndex === startIndex);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        cohorts.push({
+          openedAtIndex: Math.max(0, startIndex - inputs.leadTimeMonths),
+          startIndex,
+          count: 1,
+        });
+      }
+      changed = true;
+      break; // re-simula antes de tratar o próximo déficit
+    }
+
+    if (!changed) break;
+  }
+
+  cohorts.sort((a, b) => a.startIndex - b.startIndex);
+
+  const rows: MonthlyProjection[] = [];
+
   const state: SimulationState = {
     legacyPleno: basePleno,
     legacyRookie: safeHcNovo,
@@ -378,6 +447,7 @@ export const runPlannerProjection = (inputs: PlannerInputs): ProjectionResult =>
       hiresYear,
       criticalOpenMonth,
       riskMonths,
+      hiresScheduledLate,
     },
   };
 };
